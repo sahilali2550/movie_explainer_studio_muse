@@ -1160,6 +1160,46 @@ function stopProgressAnimation(isSuccess = true, errorMsg = '') {
   }
 }
 
+// Polls a background /render-batch job and drives the progress card with
+// REAL server progress (replaces the fake timer animation for batch renders).
+async function pollBatchJobUntilDone(jobId, statusUrl) {
+  const fill = $('progress-bar-fill');
+  const pct = $('progress-pct');
+  const stepText = $('progress-step-text');
+  for (;;) {
+    await new Promise(r => setTimeout(r, 3000));
+    let job;
+    try {
+      const pr = await fetch(statusUrl);
+      job = await pr.json();
+      if (!pr.ok) throw new Error(job.detail || ('HTTP ' + pr.status), { cause: pr.status });
+    } catch (pollErr) {
+      // Job vanished (e.g. server restarted) -> stop honestly instead of spinning forever.
+      if (pollErr && pollErr.cause === 404) throw new Error('Batch job not found on server (it may have restarted).');
+      console.warn('Batch poll error:', pollErr);
+      continue;
+    }
+    const p = Math.max(0, Math.min(100, Math.round(job.progress || 0)));
+    if (fill) fill.style.width = p + '%';
+    if (pct) pct.textContent = p + '%';
+    if (stepText) {
+      stepText.textContent = job.message || ('Rendering… ' + p + '%');
+      stepText.style.color = '#e2e8f0';
+    }
+    if (job.status === 'completed') {
+      stopProgressAnimation(true);
+      batchResults = job.results ? job.results.results : null;
+      showBatchResultsHub(batchResults, job.zip_url || ('/api/v1/explainer/download-bundle-zip?job_id=' + jobId));
+      return;
+    }
+    if (job.status === 'failed') {
+      stopProgressAnimation(false, job.error || job.message || 'Batch failed');
+      alert('Batch rendering failed: ' + (job.error || job.message || 'unknown error'));
+      return;
+    }
+  }
+}
+
 async function renderExplainerVideo() {
   const scriptText = $('script-area').value.trim();
   if (!scriptText) {
@@ -1238,16 +1278,12 @@ async function renderExplainerVideo() {
       } catch (parseErr) {
         throw new Error(`Server error (HTTP ${res.status}): ${resText.slice(0, 150)}`);
       }
-      const isOk = Boolean(data && data.success === true);
-      const errMsg = data ? (data.error || data.detail || 'Batch rendering error') : 'Server error';
-      stopProgressAnimation(isOk, errMsg);
-
-      if (isOk && data.results) {
-        batchResults = data.results;
-        showBatchResultsHub(batchResults, data.zip_url || `/api/v1/explainer/download-bundle-zip?job_id=${data.job_id}`);
-      } else {
-        alert('Batch rendering failed: ' + errMsg);
+      if (!data || !data.job_id) {
+        throw new Error((data && (data.detail || data.error)) || 'Batch enqueue failed');
       }
+      // Background job: stop the fake timer, poll REAL server progress instead.
+      if (typeof progressInterval !== 'undefined' && progressInterval) clearInterval(progressInterval);
+      await pollBatchJobUntilDone(data.job_id, data.status_url || `/api/v1/explainer/render-batch/${data.job_id}`);
     } else {
       // Single Language Mode
       const lang = $('select-lang').value;

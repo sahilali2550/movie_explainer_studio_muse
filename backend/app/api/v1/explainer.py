@@ -5,6 +5,7 @@ import shutil
 import json
 import zipfile
 import asyncio
+import threading
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
@@ -943,36 +944,71 @@ async def update_thumbnail_endpoint(
     raise HTTPException(status_code=400, detail="Thumbnail base frame not found or invalid path.")
 
 
-@router.post("/render-batch")
-async def render_batch_endpoint(
-    script_text: str = Form(...),
-    languages: str = Form("en,es,ur"),
-    export_mode: str = Form("youtube_audio_pack"),
-    url: Optional[str] = Form(None),
-    voice_speed: str = Form("fast"),
-    aspect_ratio: str = Form("vertical"),
-    mood_theme: str = Form("suspense"),
-    burn_subtitles: bool = Form(True),
-    watermark: Optional[str] = Form(""),
-    title: Optional[str] = Form("Movie Story Recap"),
-    genre: str = Form("movie_recap"),
-    audio_mode: str = Form("hybrid"),
-    scripts_json: Optional[str] = Form(None),
-    voices_json: Optional[str] = Form(None),
-    transcript_text: Optional[str] = Form(None),
-    local_file: Optional[UploadFile] = File(None)
-):
-    """
-    1-Click Multi-Language Multiplier Engine:
-    Mode A: 'youtube_audio_pack' (1 Master Video + Multi-Language Dubs + SRT Subtitles) - 80% faster, YouTube native.
-    Mode B: 'independent_videos' (Full separate MP4s per language) - For multi-channel creators.
-    """
-    validate_uploaded_media(local_file, is_video=True)
+# ---------------------------------------------------------------------------
+# Batch render jobs: /render-batch returns immediately with a job_id and the
+# heavy multi-language render runs in a background thread with its own
+# asyncio event loop. Clients poll GET /render-batch/{job_id} for REAL
+# progress (this replaces the old fake timer animation + 10-20 min request).
+# ---------------------------------------------------------------------------
+batch_jobs: Dict[str, Dict[str, Any]] = {}
+_batch_jobs_lock = threading.Lock()
 
-    job_id = str(uuid.uuid4())[:8]
-    lang_list = [l.strip() for l in languages.split(",") if l.strip() and l.strip() in SUPPORTED_LANGUAGES]
-    if not lang_list:
-        lang_list = ["en"]
+
+def _update_batch_job(job_id: str, **fields: Any) -> None:
+    """Thread-safe progress/status update for a batch render job."""
+    with _batch_jobs_lock:
+        job = batch_jobs.get(job_id)
+        if job is not None:
+            job.update(fields)
+
+
+def _batch_job_thread_entry(job_id: str, params: Dict[str, Any]) -> None:
+    """Thread entry: runs the async batch worker with its own event loop."""
+    try:
+        asyncio.run(_run_batch_job(job_id, params))
+    except HTTPException as he:
+        _update_batch_job(job_id, status="failed", progress=0, current_lang=None,
+                          message=f"Batch failed: {he.detail}", error=str(he.detail))
+    except Exception as e:
+        _update_batch_job(job_id, status="failed", progress=0, current_lang=None,
+                          message=f"Batch failed: {e}", error=str(e))
+        log_event(f"❌ [Batch] Job {job_id} crashed: {e}", "ERROR")
+    finally:
+        # If the worker died before moving the saved upload, clean it here.
+        saved = params.get("saved_upload_path")
+        if saved and os.path.exists(saved):
+            try:
+                os.remove(saved)
+            except Exception:
+                pass
+
+
+async def _run_batch_job(job_id: str, P: Dict[str, Any]) -> None:
+    """
+    Background worker for a /render-batch job. Runs in its own thread with its
+    own asyncio event loop (see _batch_job_thread_entry). Reports real progress
+    into batch_jobs; never raises to the HTTP layer.
+    """
+    # Unpack params captured at enqueue time (the HTTP request is long gone).
+    script_text: str = P["script_text"]
+    languages: str = P.get("languages", "en")
+    export_mode: str = P.get("export_mode", "youtube_audio_pack")
+    url: Optional[str] = P.get("url")
+    voice_speed: str = P.get("voice_speed", "fast")
+    aspect_ratio: str = P.get("aspect_ratio", "vertical")
+    mood_theme: str = P.get("mood_theme", "suspense")
+    burn_subtitles: bool = P.get("burn_subtitles", True)
+    watermark: str = P.get("watermark", "") or ""
+    title: Optional[str] = P.get("title")
+    genre: str = P.get("genre", "movie_recap")
+    audio_mode: str = P.get("audio_mode", "hybrid")
+    scripts_json: Optional[str] = P.get("scripts_json")
+    voices_json: Optional[str] = P.get("voices_json")
+    transcript_text: Optional[str] = P.get("transcript_text")
+    saved_upload_path: Optional[str] = P.get("saved_upload_path")
+    upload_filename: str = P.get("upload_filename", "") or ""
+    lang_list: List[str] = P.get("lang_list") or ["en"]
+    _update_batch_job(job_id, status="running", progress=2, message="Batch job started…")
 
     # Parse dialogue timeline from transcript if provided
     dialogue_timeline = []
@@ -1012,9 +1048,9 @@ async def render_batch_endpoint(
     master_video_url = None
 
     try:
-        if local_file and local_file.filename:
-            save_upload_with_limit(local_file, raw_video_path, MAX_VIDEO_BYTES)
-            movie_title = os.path.splitext(local_file.filename)[0]
+        if saved_upload_path and os.path.exists(saved_upload_path):
+            shutil.move(saved_upload_path, raw_video_path)
+            movie_title = os.path.splitext(upload_filename)[0] or movie_title
         elif url:
             dl_ok = VideoEngine.download_youtube_video(url, raw_video_path)
             if not dl_ok or not os.path.exists(raw_video_path):
@@ -1022,6 +1058,7 @@ async def render_batch_endpoint(
         else:
             raise HTTPException(status_code=400, detail="Must provide either a YouTube URL or video file.")
 
+        _update_batch_job(job_id, progress=8, message="Video source ready — extracting dialogue…")
         # Phase 6A: ASR for batch endpoint if no dialogue timeline exists
         if not dialogue_timeline and raw_video_path and os.path.exists(raw_video_path):
             from app.services.asr_engine import ASREngine
@@ -1126,6 +1163,7 @@ async def render_batch_endpoint(
                 lang=base_lang
             )
             master_video_url = f"/outputs/{master_video_filename}"
+            _update_batch_job(job_id, progress=30, message="Master video rendered — generating dubs…", current_lang=None)
 
             # Cleanup master slices
             for mp in [base_speech_path, master_slice_path, master_audio_mixed]:
@@ -1134,7 +1172,11 @@ async def render_batch_endpoint(
                     except Exception: pass
 
             # 3. For each language: Generate Synced Dub Track (.mp3), SRT file, Thumbnails & SEO
-            for lang in lang_list:
+            for _li, lang in enumerate(lang_list):
+                _update_batch_job(job_id,
+                                  progress=30 + int(65 * (_li + 1) / max(1, len(lang_list))),
+                                  message=f"Audio pack {_li + 1}/{len(lang_list)}: {SUPPORTED_LANGUAGES.get(lang, {}).get('name', lang)}…",
+                                  current_lang=lang)
                 try:
                     if lang in pre_scripts and pre_scripts[lang] and pre_scripts[lang].strip():
                         localized_script = pre_scripts[lang].strip()
@@ -1226,7 +1268,11 @@ async def render_batch_endpoint(
 
         # Mode B: Independent Full Videos per Language
         else:
-            for lang in lang_list:
+            for _li, lang in enumerate(lang_list):
+                _update_batch_job(job_id,
+                                  progress=10 + int(85 * (_li + 1) / max(1, len(lang_list))),
+                                  message=f"Video {_li + 1}/{len(lang_list)}: {SUPPORTED_LANGUAGES.get(lang, {}).get('name', lang)}…",
+                                  current_lang=lang)
                 try:
                     if lang in pre_scripts and pre_scripts[lang] and pre_scripts[lang].strip():
                         localized_script = pre_scripts[lang].strip()
@@ -1369,18 +1415,26 @@ async def render_batch_endpoint(
                     print(f"[Batch Multiplier Error {lang}] {e}")
 
         if len(results_by_lang) == 0:
-            raise HTTPException(status_code=500, detail="Batch rendering failed for all selected languages.")
+            _update_batch_job(job_id, status="failed", progress=0, current_lang=None,
+                              message="Batch rendering failed for all selected languages.",
+                              error="Batch rendering failed for all selected languages.")
+            return
 
-        return {
-            "success": True,
-            "job_id": job_id,
-            "export_mode": export_mode,
-            "master_video_filename": master_video_filename,
-            "master_video_url": master_video_url,
-            "languages_count": len(results_by_lang),
-            "results": results_by_lang,
-            "zip_url": f"/api/v1/explainer/download-bundle-zip?job_id={job_id}"
-        }
+        _update_batch_job(
+            job_id, status="completed", progress=100, current_lang=None,
+            message=f"Batch complete: {len(results_by_lang)} language(s) rendered.",
+            results={
+                "success": True,
+                "job_id": job_id,
+                "export_mode": export_mode,
+                "master_video_filename": master_video_filename,
+                "master_video_url": master_video_url,
+                "languages_count": len(results_by_lang),
+                "results": results_by_lang,
+                "zip_url": f"/api/v1/explainer/download-bundle-zip?job_id={job_id}",
+            },
+        )
+        return
     finally:
         # Guaranteed cleanup of raw ingested video
         if os.path.exists(raw_video_path):
@@ -1388,6 +1442,112 @@ async def render_batch_endpoint(
             except Exception: pass
         # Catch-all: batch leftovers ({job_id}_{lang}_* etc.)
         cleanup_job_temp_files(job_id)
+
+
+# ---------------------------------------------------------------------------
+# /render-batch as a background job: returns immediately with a job_id.
+# Poll GET /render-batch/{job_id} for real progress.
+# ---------------------------------------------------------------------------
+@router.post("/render-batch")
+async def render_batch_endpoint(
+    script_text: str = Form(...),
+    languages: str = Form("en,es,ur"),
+    export_mode: str = Form("youtube_audio_pack"),
+    url: Optional[str] = Form(None),
+    voice_speed: str = Form("fast"),
+    aspect_ratio: str = Form("vertical"),
+    mood_theme: str = Form("suspense"),
+    burn_subtitles: bool = Form(True),
+    watermark: Optional[str] = Form(""),
+    title: Optional[str] = Form("Movie Story Recap"),
+    genre: str = Form("movie_recap"),
+    audio_mode: str = Form("hybrid"),
+    scripts_json: Optional[str] = Form(None),
+    voices_json: Optional[str] = Form(None),
+    transcript_text: Optional[str] = Form(None),
+    local_file: Optional[UploadFile] = File(None)
+):
+    """
+    1-Click Multi-Language Multiplier Engine (async job):
+    Mode A: 'youtube_audio_pack' (1 Master Video + Multi-Language Dubs + SRT Subtitles).
+    Mode B: 'independent_videos' (Full separate MP4s per language).
+    Returns immediately; the heavy render runs in a background thread.
+    """
+    validate_uploaded_media(local_file, is_video=True)
+
+    job_id = str(uuid.uuid4())[:8]
+    lang_list = [l.strip() for l in languages.split(",") if l.strip() and l.strip() in SUPPORTED_LANGUAGES]
+    if not lang_list:
+        lang_list = ["en"]
+
+    # Persist the uploaded file NOW: the request (and its temp upload) is gone
+    # once this endpoint returns, but the background worker needs the bytes.
+    saved_upload_path = None
+    upload_filename = ""
+    if local_file is not None and getattr(local_file, "filename", ""):
+        clean_ext = os.path.splitext(local_file.filename)[1].lower() or ".mp4"
+        saved_upload_path = str(UPLOADS_DIR / f"{job_id}_batch_upload{clean_ext}")
+        save_upload_with_limit(local_file, saved_upload_path, MAX_VIDEO_BYTES)
+        upload_filename = local_file.filename
+
+    if not url and not saved_upload_path:
+        raise HTTPException(status_code=400, detail="Must provide either a YouTube URL or video file.")
+
+    params: Dict[str, Any] = {
+        "script_text": script_text,
+        "languages": languages,
+        "export_mode": export_mode,
+        "url": url,
+        "voice_speed": voice_speed,
+        "aspect_ratio": aspect_ratio,
+        "mood_theme": mood_theme,
+        "burn_subtitles": burn_subtitles,
+        "watermark": watermark,
+        "title": title,
+        "genre": genre,
+        "audio_mode": audio_mode,
+        "scripts_json": scripts_json,
+        "voices_json": voices_json,
+        "transcript_text": transcript_text,
+        "saved_upload_path": saved_upload_path,
+        "upload_filename": upload_filename,
+        "lang_list": lang_list,
+    }
+    with _batch_jobs_lock:
+        batch_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "progress": 0,
+            "message": "Batch job queued…",
+            "current_lang": None,
+            "languages": lang_list,
+            "export_mode": export_mode,
+            "results": None,
+            "error": None,
+            "zip_url": f"/api/v1/explainer/download-bundle-zip?job_id={job_id}",
+        }
+    thread = threading.Thread(target=_batch_job_thread_entry, args=(job_id, params), daemon=True)
+    thread.start()
+    log_event(f"🧵 [Batch] Job {job_id} queued ({len(lang_list)} languages, mode={export_mode})", "INFO")
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "queued",
+        "message": "Batch render started in background.",
+        "status_url": f"/api/v1/explainer/render-batch/{job_id}",
+        "zip_url": f"/api/v1/explainer/download-bundle-zip?job_id={job_id}",
+    }
+
+
+@router.get("/render-batch/{job_id}")
+def get_batch_job_status(job_id: str):
+    """Poll real progress of a background batch render job."""
+    with _batch_jobs_lock:
+        job = batch_jobs.get(job_id)
+        job = dict(job) if job else None
+    if not job:
+        raise HTTPException(status_code=404, detail="Batch job not found.")
+    return job
 
 
 @router.get("/download-bundle-zip")
