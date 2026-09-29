@@ -181,8 +181,11 @@ def test_youtube_api_schedule_workflow(tmp_path, monkeypatch):
         "refresh_token": "token_sched_test"
     })
 
-    # Create dummy video file
-    dummy_video = tmp_path / "test_video.mp4"
+    # Create dummy video file INSIDE the app storage dir: /youtube/schedule
+    # now (correctly) rejects paths outside STORAGE_DIR (path traversal fix).
+    from app.core.config import OUTPUTS_DIR
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    dummy_video = OUTPUTS_DIR / "test_sched_dummy.mp4"
     dummy_video.write_bytes(b"dummy mp4 video bytes")
 
     # Future publish datetime (tomorrow at 19:00 UTC)
@@ -213,5 +216,11 @@ def test_youtube_api_schedule_workflow(tmp_path, monkeypatch):
     task_data = task_resp.json()
     assert task_data["task_id"] == task_id
     assert task_data["channel_id"] == "UC_TEST_SCHED"
+
+    # cleanup dummy file from storage
+    try:
+        dummy_video.unlink()
+    except Exception:
+        pass
 
 
