@@ -810,7 +810,8 @@
     })();
 
     function apiUrlWithToken(url) {
-      if (window.__API_TOKEN__ && url.indexOf("/api/") === 0) {
+      // Also covers /outputs/* media URLs now that they require the API token.
+      if (window.__API_TOKEN__ && (url.indexOf("/api/") === 0 || url.indexOf("/outputs/") === 0)) {
         const sep = url.indexOf("?") === -1 ? "?" : "&";
         return url + sep + "token=" + encodeURIComponent(window.__API_TOKEN__);
       }
@@ -1358,7 +1359,7 @@
         $("outputRes").textContent = $("resolutionSelect").value;
 
         const player = $("mainVideoPlayer");
-        player.src = videoUrl;
+        player.src = apiUrlWithToken(videoUrl);
         $("playerPlaceholder").classList.add("hidden");
         player.classList.remove("hidden");
         player.play();

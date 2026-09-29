@@ -2,10 +2,13 @@ import os
 import re
 import json
 import asyncio
+import logging
 import urllib.request
 from typing import Dict, List, Tuple, Optional, Any
 from app.services.script_engine import ScriptEngine
 from app.core.config import ROUTER_URL, ROUTER_MODEL
+
+_log = logging.getLogger(__name__)
 
 class AgentSwarmEngine:
     """
@@ -67,8 +70,9 @@ class AgentSwarmEngine:
         try:
             from app.services.openai_client import is_openai_available, call_chatgpt_llm
             use_openai = is_openai_available()
-        except Exception:
-            pass
+        except Exception as e:
+            # Optional provider unavailable — fall back to the 9Router path below.
+            _log.debug("openai_client unavailable, using 9Router fallback: %s", e)
 
         excerpt_len = 24000 if use_openai else 4000
         excerpt = transcript_text[:excerpt_len] if transcript_text else ""

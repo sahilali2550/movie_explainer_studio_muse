@@ -18,7 +18,9 @@ const $ = id => document.getElementById(id);
 })();
 
 function apiUrlWithToken(url) {
-  if (window.__API_TOKEN__ && url.indexOf("/api/") === 0) {
+  // Covers /api/* calls and direct /outputs/* media URLs (video player,
+  // thumbnails, downloads) now that /outputs/* requires the API token.
+  if (window.__API_TOKEN__ && (url.indexOf("/api/") === 0 || url.indexOf("/outputs/") === 0)) {
     const sep = url.indexOf("?") === -1 ? "?" : "&";
     return url + sep + "token=" + encodeURIComponent(window.__API_TOKEN__);
   }
@@ -617,14 +619,14 @@ function renderAutopilotResults(data) {
   const player = $('result-player');
   const dlBtn = $('btn-download-video');
   if (player && data.video_url) {
-    player.src = data.video_url;
+    player.src = apiUrlWithToken(data.video_url);
     if (data.thumbnails && data.thumbnails[0]) {
-      player.poster = data.thumbnails[0].url;
+      player.poster = apiUrlWithToken(data.thumbnails[0].url);
     }
     player.load();
   }
   if (dlBtn && data.video_url) {
-    dlBtn.href = data.video_url;
+    dlBtn.href = apiUrlWithToken(data.video_url);
   }
 
   const thumbsContainer = $('thumbnails-container');
@@ -634,10 +636,10 @@ function renderAutopilotResults(data) {
       const card = document.createElement('div');
       card.className = 'thumbnail-card';
       card.innerHTML = `
-        <img src="${t.url}" style="width:100%; border-radius:8px; display:block;" alt="Thumbnail ${i+1}">
+        <img src="${apiUrlWithToken(t.url)}" style="width:100%; border-radius:8px; display:block;" alt="Thumbnail ${i+1}">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
           <span style="font-size:0.75rem; color:#cbd5e1;">Option ${i+1}</span>
-          <a href="${t.url}" download class="btn-secondary" style="padding:2px 8px; font-size:0.70rem; text-decoration:none;">⬇️ Save</a>
+          <a href="${apiUrlWithToken(t.url)}" download class="btn-secondary" style="padding:2px 8px; font-size:0.70rem; text-decoration:none;">⬇️ Save</a>
         </div>
       `;
       thumbsContainer.appendChild(card);
@@ -1341,12 +1343,12 @@ function displayLanguageResult(data, lang) {
 
   // 1. Video Player
   const player = $('result-player');
-  player.src = data.video_url;
+  player.src = apiUrlWithToken(data.video_url);
   if (data.thumbnails && data.thumbnails.length > 0 && data.thumbnails[0].url) {
-    player.poster = data.thumbnails[0].url;
+    player.poster = apiUrlWithToken(data.thumbnails[0].url);
   }
   player.load();
-  $('btn-download-video').href = data.video_url;
+  $('btn-download-video').href = apiUrlWithToken(data.video_url);
   $('btn-download-video').download = data.video_filename;
 
   // YouTube Audio Track & SRT Downloads
@@ -1371,7 +1373,7 @@ function displayLanguageResult(data, lang) {
 
   if (data.srt_url) {
     const srtBtn = document.createElement('a');
-    srtBtn.href = data.srt_url;
+    srtBtn.href = apiUrlWithToken(data.srt_url);
     srtBtn.download = data.srt_filename || `Subtitles_${lang.toUpperCase()}.srt`;
     srtBtn.className = 'btn-secondary';
     srtBtn.style.cssText = 'text-decoration:none; font-size:0.8rem; padding:8px 12px; background:rgba(168, 85, 247, 0.15); border-color:#c084fc; color:#c084fc;';
@@ -1389,14 +1391,14 @@ function displayLanguageResult(data, lang) {
       card.className = 'thumb-card';
       card.id = `thumb-card-${idx}`;
       card.innerHTML = `
-        <img id="thumb-img-${idx}" src="${escapeHtml(t.url)}" alt="${escapeHtml(t.hook_text)}">
+        <img id="thumb-img-${idx}" src="${escapeHtml(apiUrlWithToken(t.url))}" alt="${escapeHtml(t.hook_text)}">
         <div class="thumb-card-body">
           <span class="thumb-badge">${escapeHtml(t.badge)}</span>
           <div style="display:flex; gap:4px;">
             <input type="text" id="thumb-input-${idx}" dir="auto" value="${escapeHtml(t.hook_text)}" style="font-size:0.75rem; padding:4px 6px; text-align:start;">
             <button type="button" class="btn-secondary btn-update-thumb" style="padding:4px 8px; font-size:0.72rem; white-space:nowrap;">🎨 Update</button>
           </div>
-          <a id="thumb-download-${idx}" href="${escapeHtml(t.url)}" download="${escapeHtml(t.filename)}" class="btn-secondary" style="font-size:0.75rem; padding:4px 8px;">⬇️ Download</a>
+          <a id="thumb-download-${idx}" href="${escapeHtml(apiUrlWithToken(t.url))}" download="${escapeHtml(t.filename)}" class="btn-secondary" style="font-size:0.75rem; padding:4px 8px;">⬇️ Download</a>
         </div>
       `;
       const updateBtn = card.querySelector('.btn-update-thumb');
@@ -1521,13 +1523,13 @@ async function generateInstantThumbnails() {
         item.style.padding = '6px';
 
         item.innerHTML = `
-          <img id="instant-img-${idx}" src="${t.url}" style="width:100%; border-radius:4px; aspect-ratio:16/9; object-fit:cover; display:block;" alt="${t.hook_text}">
+          <img id="instant-img-${idx}" src="${apiUrlWithToken(t.url)}" style="width:100%; border-radius:4px; aspect-ratio:16/9; object-fit:cover; display:block;" alt="${t.hook_text}">
           <div style="font-size:0.68rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.badge}</div>
           <div style="display:flex; gap:3px;">
             <input type="text" id="instant-input-${idx}" value="${t.hook_text}" style="font-size:0.7rem; padding:2px 4px; flex:1; height:24px;">
             <button type="button" class="btn-secondary" style="padding:2px 6px; font-size:0.68rem; height:24px;" onclick="updateInstantThumbLive('${t.filename}', ${idx}, '${lang}', '${t.badge}')">🎨</button>
           </div>
-          <a id="instant-dl-${idx}" href="${t.url}" download="${t.filename}" class="btn-secondary" style="font-size:0.68rem; padding:2px 4px; text-align:center; text-decoration:none; margin-top:2px;">⬇️ Download</a>
+          <a id="instant-dl-${idx}" href="${apiUrlWithToken(t.url)}" download="${t.filename}" class="btn-secondary" style="font-size:0.68rem; padding:2px 4px; text-align:center; text-decoration:none; margin-top:2px;">⬇️ Download</a>
         `;
         container.appendChild(item);
       });

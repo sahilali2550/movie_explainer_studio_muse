@@ -245,7 +245,7 @@ class VoiceEngine:
                     f.write(f"file '{clean_p}'\n")
 
             cmd = [ffmpeg_bin, "-y", "-f", "concat", "-safe", "0", "-i", concat_txt, "-c", "copy", output_path]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+            await asyncio.to_thread(subprocess.run, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
             if os.path.exists(concat_txt):
                 try: os.remove(concat_txt)
                 except Exception: pass
@@ -440,7 +440,7 @@ class VoiceEngine:
         filt_str = "equalizer=f=250:width_type=h:width=120:g=2.2,equalizer=f=3000:width_type=h:width=250:g=1.8,loudnorm"
         try:
             cmd = [ffmpeg_bin, "-y", "-i", temp_raw, "-af", filt_str, "-t", "9.0", preview_path]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            await asyncio.to_thread(subprocess.run, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             if os.path.exists(temp_raw):
                 try: os.remove(temp_raw)
                 except Exception: pass
@@ -486,7 +486,7 @@ class VoiceEngine:
         filt_str = "equalizer=f=250:width_type=h:width=120:g=2.0,equalizer=f=3200:width_type=h:width=220:g=1.6,loudnorm"
         try:
             cmd = [ffmpeg_bin, "-y", "-i", temp_raw, "-af", filt_str, output_path]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            await asyncio.to_thread(subprocess.run, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             return os.path.exists(output_path) and os.path.getsize(output_path) > 1000
         except Exception as e:
             print(f"[Cloned Story Synthesis Error] {e}")

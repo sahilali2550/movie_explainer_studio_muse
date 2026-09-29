@@ -72,7 +72,9 @@ def save_upload_with_limit(upload_file: UploadFile, dest_path: str, max_bytes: i
                         detail=f"File too large: '{upload_file.filename}' exceeds the {max_bytes // (1024 * 1024)} MB limit."
                     )
                 buffer.write(chunk)
-    except HTTPException:
+    except Exception:
+        # Remove the partial file on ANY failure (413 rejection, disk-full
+        # OSError, read errors) so bounded uploads never leave junk behind.
         try:
             if os.path.exists(dest_path):
                 os.remove(dest_path)
@@ -399,7 +401,7 @@ async def generate_script_endpoint(
         log_event(f"⚡ Instant transcript processed! {len(dialogue_timeline)} timed cues mapped. Bypassing YouTube download delay!", "SUCCESS")
     elif url and ("youtube.com" in url or "youtu.be" in url):
         log_event(f"🌐 Fetching metadata & subtitles from YouTube: {url[:50]}...", "INFO")
-        info = VideoEngine.extract_youtube_info(url, str(TEMP_DIR), job_id)
+        info = await asyncio.to_thread(VideoEngine.extract_youtube_info, url, str(TEMP_DIR), job_id)
         movie_title = info.get("title", movie_title)
         desc = info.get("description", "")
         subs = info.get("subtitles_text", "")
@@ -624,7 +626,7 @@ async def render_video_endpoint(
             transcript_source = "user_transcript"
         elif url and VideoEngine.is_valid_youtube_url(url):
             try:
-                info = VideoEngine.extract_youtube_info(url, str(TEMP_DIR), job_id)
+                info = await asyncio.to_thread(VideoEngine.extract_youtube_info, url, str(TEMP_DIR), job_id)
                 subs_raw = info.get("subtitles_text", "")
                 if subs_raw:
                     parsed_trans = VideoEngine.parse_raw_transcript_text(subs_raw)
@@ -980,7 +982,7 @@ async def render_batch_endpoint(
         dialogue_timeline = parsed_trans.get("dialogue_timeline", [])
     elif url and VideoEngine.is_valid_youtube_url(url):
         try:
-            info = VideoEngine.extract_youtube_info(url, str(TEMP_DIR), job_id)
+            info = await asyncio.to_thread(VideoEngine.extract_youtube_info, url, str(TEMP_DIR), job_id)
             subs_raw = info.get("subtitles_text", "")
             if subs_raw:
                 parsed_trans = VideoEngine.parse_raw_transcript_text(subs_raw)
@@ -1498,13 +1500,13 @@ async def auto_detect_context_endpoint(
     if not raw_text and url:
         try:
             temp_id = str(uuid.uuid4())[:8]
-            info = VideoEngine.extract_youtube_info(url, str(TEMP_DIR), temp_id)
+            info = await asyncio.to_thread(VideoEngine.extract_youtube_info, url, str(TEMP_DIR), temp_id)
             hint = hint or info.get("title", "")
             raw_text = info.get("subtitles_text", "")
         except Exception as e:
             log_event(f"⚠️ [Autopilot] YouTube info/hint extraction failed, continuing without it: {e}", "WARNING")
 
-    context = AgentSwarmEngine.detective_agent(raw_text, hint)
+    context = await asyncio.to_thread(AgentSwarmEngine.detective_agent, raw_text, hint)
     return {
         "success": True,
         "title": context.get("title", hint or "Movie Recap"),
@@ -1598,7 +1600,7 @@ async def run_autopilot_endpoint(
             transcript_source = "user_transcript"
         elif url and VideoEngine.is_valid_youtube_url(url):
             try:
-                info = VideoEngine.extract_youtube_info(url, str(TEMP_DIR), job_id)
+                info = await asyncio.to_thread(VideoEngine.extract_youtube_info, url, str(TEMP_DIR), job_id)
                 subs_raw = info.get("subtitles_text", "")
                 if subs_raw:
                     parsed_trans = VideoEngine.parse_raw_transcript_text(subs_raw)

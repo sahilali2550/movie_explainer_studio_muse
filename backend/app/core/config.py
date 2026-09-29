@@ -1,7 +1,10 @@
 import os
 import shutil
+import logging
 from pathlib import Path
 from typing import Dict, Any, List
+
+_log = logging.getLogger(__name__)
 
 # Base Paths
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -38,8 +41,8 @@ def get_ffmpeg_binary() -> str:
         exe = imageio_ffmpeg.get_ffmpeg_exe()
         if exe and os.path.exists(exe):
             return exe
-    except Exception:
-        pass
+    except Exception as e:
+        _log.debug("imageio-ffmpeg fallback unavailable: %s", e)
     # 3. Common Windows install locations
     for p in [
         r"C:\Program Files\Anas Media Downloader\_internal\bin\ffmpeg.exe",
