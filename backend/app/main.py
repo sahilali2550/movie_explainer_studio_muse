@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -77,22 +77,28 @@ if (FRONTEND_DIR / "js").exists():
 app.include_router(explainer_router, prefix="/api/v1")
 app.include_router(youtube_router, prefix="/api/v1")
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
 @app.get("/")
-def serve_frontend():
+def serve_frontend(request: Request):
     index_file = FRONTEND_DIR / "index.html"
     if index_file.exists():
         from fastapi.responses import HTMLResponse
         page = index_file.read_text(encoding="utf-8")
-        # Inject the API token so the dashboard's fetch wrapper can
-        # authenticate its /api/* calls without any user setup.
-        # API_TOKEN is urlsafe (letters, digits, '-' and '_') — safe to inline.
-        injected = (
-            f'<script>window.__API_TOKEN__="{API_TOKEN}";</script></head>'
-        )
-        if "</head>" in page:
-            page = page.replace("</head>", injected, 1)
-        else:
-            page = injected.replace("</head>", "") + page
+        # Inject the API token ONLY for loopback clients. The token is a
+        # bearer secret: serving it to any remote (LAN) client that loads "/"
+        # would hand them full access to every protected /api/* and /outputs/*
+        # route. Local desktop use (pywebview / localhost browser) is
+        # unaffected. API_TOKEN is urlsafe (letters, digits, '-' and '_').
+        client_host = request.client.host if request.client else ""
+        if client_host in _LOOPBACK_HOSTS:
+            injected = (
+                f'<script>window.__API_TOKEN__="{API_TOKEN}";</script></head>'
+            )
+            if "</head>" in page:
+                page = page.replace("</head>", injected, 1)
+            else:
+                page = injected.replace("</head>", "") + page
         return HTMLResponse(content=page)
     return {
         "status": "online",
