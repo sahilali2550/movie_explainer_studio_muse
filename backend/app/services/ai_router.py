@@ -282,18 +282,16 @@ def generate_narrative_text(
 
     # Dispatch to 9Router
     if active == "9router":
-        from app.services.nine_router_client import call_9router_llm
+        from app.services.nine_router_client import call_ninerouter_llm
         url = p_info.get("url", "http://127.0.0.1:20128/v1")
         model = p_info.get("model", "new-combo")
         key = p_info.get("key", "")
-        return call_9router_llm(
+        return call_ninerouter_llm(
             prompt=prompt,
             system_prompt=system_prompt,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
-            api_url=url,
-            api_key=key
         )
 
     # Dispatch to Google Gemini
@@ -302,8 +300,8 @@ def generate_narrative_text(
         model = p_info.get("model", "gemini-1.5-flash")
         if not key:
             print("[AIRouter] Gemini key missing, falling back to 9Router...")
-            from app.services.nine_router_client import call_9router_llm
-            return call_9router_llm(prompt, system_prompt, max_tokens=max_tokens)
+            from app.services.nine_router_client import call_ninerouter_llm
+            return call_ninerouter_llm(prompt, system_prompt, max_tokens=max_tokens)
 
         try:
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
@@ -376,5 +374,5 @@ def generate_narrative_text(
             print(f"[AIRouter Custom Error] {e}")
 
     # Fallback to local 9router if active failed
-    from app.services.nine_router_client import call_9router_llm
-    return call_9router_llm(prompt, system_prompt, max_tokens=max_tokens)
+    from app.services.nine_router_client import call_ninerouter_llm
+    return call_ninerouter_llm(prompt, system_prompt, max_tokens=max_tokens)
