@@ -26,6 +26,25 @@ from app.services.youtube_engine import (
 logger = logging.getLogger("youtube_api")
 router = APIRouter(prefix="/youtube", tags=["youtube"])
 
+_STORAGE_DIR_RESOLVED = STORAGE_DIR.resolve()
+
+
+def _resolve_contained_path(raw_path: str, field_name: str) -> Path:
+    """Resolve a user-supplied media path, enforcing containment in STORAGE_DIR.
+
+    Relative paths are resolved against STORAGE_DIR. Absolute paths are only
+    accepted when they resolve inside STORAGE_DIR. Anything else raises 400,
+    so /schedule can never be pointed at arbitrary local files.
+    """
+    p = Path(raw_path)
+    resolved = (_STORAGE_DIR_RESOLVED / p).resolve() if not p.is_absolute() else p.resolve()
+    if not resolved.is_relative_to(_STORAGE_DIR_RESOLVED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must point to a file inside the app storage directory.",
+        )
+    return resolved
+
 class ClientSetupRequest(BaseModel):
     client_id: str = Field(..., min_length=5, description="Google OAuth Client ID")
     client_secret: str = Field(..., min_length=5, description="Google OAuth Client Secret")
@@ -273,12 +292,8 @@ def schedule_video(req: ScheduleVideoRequest):
     if not channel:
         raise HTTPException(status_code=404, detail=f"Channel {req.channel_id} not found in connected channels.")
 
-    # Validate video path
-    video_path = Path(req.video_path)
-    if not video_path.is_absolute():
-        video_path = (STORAGE_DIR / req.video_path).resolve()
-    else:
-        video_path = video_path.resolve()
+    # Validate video path (must stay inside STORAGE_DIR)
+    video_path = _resolve_contained_path(req.video_path, "video_path")
 
     if not video_path.exists() or not video_path.is_file():
         raise HTTPException(status_code=400, detail=f"Video file not found at: {req.video_path}")
@@ -286,22 +301,14 @@ def schedule_video(req: ScheduleVideoRequest):
     # Validate thumbnail path if provided
     thumb_path = None
     if req.thumbnail_path:
-        tp = Path(req.thumbnail_path)
-        if not tp.is_absolute():
-            tp = (STORAGE_DIR / req.thumbnail_path).resolve()
-        else:
-            tp = tp.resolve()
+        tp = _resolve_contained_path(req.thumbnail_path, "thumbnail_path")
         if tp.exists():
             thumb_path = str(tp)
 
     # Validate srt path if provided
     srt_path = None
     if req.srt_path:
-        sp = Path(req.srt_path)
-        if not sp.is_absolute():
-            sp = (STORAGE_DIR / req.srt_path).resolve()
-        else:
-            sp = sp.resolve()
+        sp = _resolve_contained_path(req.srt_path, "srt_path")
         if sp.exists():
             srt_path = str(sp)
 
