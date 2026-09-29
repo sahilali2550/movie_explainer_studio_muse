@@ -1645,6 +1645,16 @@ class VideoEngine:
         return cues
 
     @staticmethod
+    @staticmethod
+    def escape_ass_text(text: str) -> str:
+        """
+        Escapes ASS override-block delimiters in dialogue text.
+        A stray '{' would make libass swallow the rest of the cue as an
+        override block; '\\{' / '\\}' are the documented literal escapes.
+        No bidi controls are added, so RTL (Urdu/Arabic) shaping is untouched.
+        """
+        return text.replace("{", "\\{").replace("}", "\\}")
+
     def generate_ass_subtitle_file(
         scene_subtitles: List[str],
         total_duration: float,
@@ -1731,7 +1741,7 @@ class VideoEngine:
                 for sub_s, sub_e, sub_text in cues_to_add:
                     start_str = sec_to_ass(sub_s)
                     end_str = sec_to_ass(sub_e)
-                    ass_lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{sub_text}")
+                    ass_lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{VideoEngine.escape_ass_text(sub_text)}")
         elif scene_subtitles:
             # Proportional duration based on string length (Syllable/Character-weighted)
             clean_subs = [ScriptEngine.strip_production_tags(s).strip().replace("\r", " ").replace("\n", " ") for s in scene_subtitles if s.strip()]
@@ -1754,7 +1764,7 @@ class VideoEngine:
                     for sub_s, sub_e, sub_text in cues_to_add:
                         start_str = sec_to_ass(sub_s)
                         end_str = sec_to_ass(sub_e)
-                        ass_lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{sub_text}")
+                        ass_lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{VideoEngine.escape_ass_text(sub_text)}")
                     curr_time = t_e
 
         try:
