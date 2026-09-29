@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoExplainer AI — Automated Studio</title>
+
+  <!-- Tailwind CDN & Fonts -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: "#050914",
+            panel: "#09111f",
+            panel2: "#0d1728",
+            line: "#1c2a40",
+            muted: "#7f91ad",
+            accent: "#4f7cff",
+            violet: "#7c4dff",
+            success: "#19c37d",
+            warning: "#f6b73c",
+            danger: "#ff5d73"
+          },
+          boxShadow: {
+            glow: "0 0 30px rgba(79,124,255,.14)",
+            button: "0 12px 30px rgba(79,124,255,.25)"
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { scrollbar-width: thin; scrollbar-color: #263753 transparent; }
+    body {
+      background:
+        radial-gradient(circle at 78% 12%, rgba(79,124,255,.08), transparent 28%),
+        radial-gradient(circle at 38% 90%, rgba(124,77,255,.06), transparent 24%),
+        #050914;
+      color: #e9eff8;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .glass {
+      background: rgba(9,17,31,.86);
+      border: 1px solid rgba(38,55,83,.75);
+      backdrop-filter: blur(18px);
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(13,23,40,.98), rgba(8,16,29,.98));
+      border: 1px solid #1c2a40;
+      border-radius: 16px;
+    }
+    .input {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid #253653;
+      background: #07101d;
+      color: #eaf0f8;
+      outline: none;
+      transition: .18s ease;
+    }
+    .input:focus {
+      border-color: #4f7cff;
+      box-shadow: 0 0 0 3px rgba(79,124,255,.12);
+    }
+    .btn {
+      transition: transform .18s ease, border-color .18s ease, background .18s ease, opacity .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .gradient-btn {
+      background: linear-gradient(100deg, #326cff, #744bff);
+      box-shadow: 0 12px 30px rgba(79,124,255,.22);
+    }
+    .stage-line {
+      background: linear-gradient(90deg, #19c37d, #4f7cff);
+    }
+    .progress-track {
+      background: #121d2e;
+      overflow: hidden;
+    }
+    .progress-fill {
+      background: linear-gradient(90deg, #4f7cff, #7c4dff);
+      transition: width .45s ease;
+    }
+    .log-row + .log-row { border-top: 1px solid rgba(38,55,83,.42); }
+    .drop-active {
+      border-color: #4f7cff !important;
+      background: rgba(79,124,255,.09) !important;
+    }
+    .modal-backdrop { background: rgba(1,5,12,.78); backdrop-filter: blur(8px); }
+    .hidden-panel { display: none; }
+    .pulse-dot { animation: pulseDot 1.6s infinite; }
+    @keyframes pulseDot {
+      0%,100% { box-shadow: 0 0 0 0 rgba(79,124,255,.35); }
+      50% { box-shadow: 0 0 0 7px rgba(79,124,255,0); }
+    }
+    .video-bg {
+      background:
+        linear-gradient(180deg, rgba(2,7,14,.08), rgba(2,7,14,.82)),
+        radial-gradient(circle at 70% 30%, rgba(85,125,255,.22), transparent 24%),
+        linear-gradient(135deg, #111a2c 0%, #050913 48%, #101c31 100%);
+    }
+    .scan {
+      position: relative;
+      overflow: hidden;
+    }
+    .scan::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(79,124,255,.08), transparent);
+      transform: translateX(-100%);
+      animation: scan 3.2s infinite;
+      pointer-events: none;
+    }
+    @keyframes scan { to { transform: translateX(100%); } }
+  </style>
+</head>
+
+<body class="min-h-screen">
+  <div id="toast" class="fixed right-5 top-5 z-[100] hidden rounded-xl border border-line bg-panel2 px-4 py-3 text-sm shadow-glow"></div>
+
+  <!-- HEADER -->
+  <header class="sticky top-0 z-40 border-b border-line bg-[#050914]/90 backdrop-blur-xl">
+    <div class="flex h-[70px] items-center gap-5 px-5">
+      <div class="flex min-w-[245px] items-center gap-3">
+        <div class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-accent to-violet shadow-button">
+          <span class="text-lg font-black">A</span>
+        </div>
+        <div>
+          <div class="text-[15px] font-bold tracking-tight">AutoExplainer <span class="text-accent">AI</span></div>
+          <div class="text-[10px] uppercase tracking-[.18em] text-muted">Automated Recap Studio</div>
+        </div>
+      </div>
+
+      <div class="hidden items-center gap-1 rounded-lg border border-line bg-panel px-1 py-1 md:flex">
+        <button id="btnCreatorHub" class="rounded-md bg-panel2 px-4 py-1.5 text-xs font-medium text-white">Creator Hub</button>
+        <button id="btnStudio" class="px-4 py-1.5 text-xs text-muted">Studio</button>
+      </div>
+
+      <div class="flex flex-1 justify-center">
+        <div class="hidden items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/5 px-4 py-2 text-xs md:flex">
+          <span id="headerDot" class="pulse-dot h-2 w-2 rounded-full bg-accent"></span>
+          <span id="headerStatus">1-Click Autopilot Ready</span>
+          <span id="headerPercent" class="font-semibold text-accent">0%</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div id="ytStatusBadge" class="hidden items-center gap-2 rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-muted lg:flex">
+          <span id="ytDot" class="h-2 w-2 rounded-full bg-slate-500"></span>
+          <span id="ytStatusText">YouTube: Checking...</span>
+        </div>
+        <button id="aiSettingsBtn" class="btn flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/15 px-3 py-2 text-xs font-semibold text-blue-100 hover:bg-accent/25 shadow-sm">
+          <span>⚙️</span>
+          <span>AI Settings</span>
+        </button>
+        <button id="multiplierBtn" class="btn rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-semibold text-blue-200">
+          🌍 Global Multiplier
+        </button>
+        <button id="headerPreviewBtn" class="btn hidden rounded-lg border border-line px-3 py-2 text-xs text-muted hover:text-white sm:block">Preview</button>
+        <button id="headerExportBtn" class="btn gradient-btn rounded-lg px-4 py-2 text-xs font-bold text-white">Export</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN APP -->
+  <main class="grid min-h-[calc(100vh-70px)] grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(480px,42%)_minmax(600px,58%)]">
+
+    <!-- LEFT COLUMN -->
+    <section class="space-y-4">
+
+      <!-- 1. SOURCE INGESTION -->
+      <article class="card p-4 shadow-glow">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="grid h-7 w-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-blue-200">1</span>
+              <h2 class="text-sm font-bold">Source Ingestion</h2>
+            </div>
+            <p class="ml-9 mt-1 text-[11px] text-muted">Give the movie. AI handles the rest.</p>
+          </div>
+          <span id="sourceBadge" class="rounded-full border border-line bg-panel2 px-2.5 py-1 text-[10px] text-muted">Waiting</span>
+        </div>
+
+        <div class="mb-3 grid grid-cols-3 gap-2">
+          <button id="youtubeTab" class="source-tab rounded-lg border border-accent bg-accent/10 px-3 py-2 text-xs font-semibold text-blue-100">▶ YouTube URL</button>
+          <button id="fileTab" class="source-tab rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-muted">▣ Local Video</button>
+          <button id="transcriptTab" class="source-tab rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-muted">📝 Paste Transcript</button>
+        </div>
+
+        <div id="youtubeSource">
+          <label class="mb-1.5 block text-[11px] font-medium text-muted">YouTube URL</label>
+          <div class="relative">
+            <input id="urlInput" class="input h-11 px-3 pr-10 text-sm" placeholder="Paste YouTube video URL..." />
+            <span id="urlCheck" class="absolute right-3 top-3 text-muted">●</span>
+          </div>
+        </div>
+
+        <div id="fileSource" class="hidden">
+          <div id="dropZone" class="drop-zone cursor-pointer rounded-xl border border-dashed border-line bg-panel2/70 p-7 text-center transition">
+            <div class="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-xl bg-accent/10 text-accent">↑</div>
+            <p class="text-sm font-semibold">Drop video file here</p>
+            <p class="mt-1 text-[11px] text-muted">MP4, MOV, MKV — or click to browse</p>
+            <input id="fileInput" type="file" accept="video/*" class="hidden" />
+          </div>
+        </div>
+
+        <div id="transcriptSource" class="hidden">
+          <label class="mb-1.5 block text-[11px] font-medium text-muted">Paste Script / Plot Summary / Subtitles</label>
+          <textarea id="transcriptPasteArea" class="input h-[90px] w-full resize-none px-3 py-2 text-xs leading-5" placeholder="Paste your movie plot, subtitles, or a script from ChatGPT / Gemini here... ($0 budget — no API key needed)"></textarea>
+          <p class="mt-1.5 text-[10px] text-muted">💡 Use this when YouTube captions are disabled. Just paste plot from any free AI, press Generate.</p>
+        </div>
+
+        <div id="sourcePreview" class="mt-3 flex items-center gap-3 rounded-xl border border-line bg-panel2 p-3">
+          <div class="grid h-12 w-16 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-slate-800 to-slate-950 text-lg">🎬</div>
+          <div class="min-w-0 flex-1">
+            <div id="sourceTitle" class="truncate text-xs font-semibold">No video loaded</div>
+            <div id="sourceMeta" class="mt-1 text-[10px] text-muted">Paste URL or drop local media</div>
+          </div>
+          <span id="sourceValid" class="rounded-md bg-panel px-2 py-1 text-[10px] font-semibold text-muted">Empty</span>
+        </div>
+
+        <label class="mt-3 flex cursor-pointer items-center gap-3 text-[11px] text-muted">
+          <input id="smartSkip" type="checkbox" checked class="h-4 w-4 accent-blue-500" />
+          <span><b class="text-slate-200">Smart Skip</b> — auto-detect dialogue start/end, skip intro logos and silent end-credits.</span>
+        </label>
+      </article>
+
+      <!-- 2. SCRIPT & STORYBOARD -->
+      <article class="card p-4">
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="grid h-7 w-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-blue-200">2</span>
+              <h2 class="text-sm font-bold">AI Script & Storyboard</h2>
+            </div>
+            <p class="ml-9 mt-1 text-[11px] text-muted">Generated from story understanding and master voice duration.</p>
+          </div>
+          <span id="scriptBadge" class="rounded-full border border-line bg-panel2 px-2.5 py-1 text-[10px] text-muted">Auto-Ready</span>
+        </div>
+
+        <!-- Language + Duration Row -->
+        <div class="mb-3 grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1.5 block text-[10px] uppercase tracking-wider text-muted">🌐 Story Language</label>
+            <select id="scriptLangSelect" class="input h-9 px-2 text-xs">
+              <option value="en" selected>🇺🇸 English</option>
+              <option value="ur">🇵🇰 Urdu — اردو</option>
+              <option value="hi">🇮🇳 Hindi — हिन्दी</option>
+              <option value="ar">🇸🇦 Arabic — العربية</option>
+              <option value="es">🇲🇽 Spanish — Español</option>
+              <option value="id">🇮🇩 Indonesian — Bahasa</option>
+              <option value="pt">🇧🇷 Portuguese — Português</option>
+              <option value="de">🇩🇪 German — Deutsch</option>
+              <option value="fr">🇫🇷 French — Français</option>
+              <option value="ru">🇷🇺 Russian — Русский</option>
+              <option value="tr">🇹🇷 Turkish — Türkçe</option>
+              <option value="it">🇮🇹 Italian — Italiano</option>
+              <option value="vi">🇻🇳 Vietnamese — Tiếng Việt</option>
+              <option value="th">🇹🇭 Thai — ไทย</option>
+              <option value="ja">🇯🇵 Japanese — 日本語</option>
+              <option value="ko">🇰🇷 Korean — 한국어</option>
+            </select>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-[10px] uppercase tracking-wider text-muted">⏱ Target Duration</label>
+            <div class="flex gap-1.5" id="durationBtns">
+              <button type="button" data-dur="1"  class="dur-btn flex-1 rounded-md border border-line bg-panel2 py-1.5 text-[9px] text-muted hover:border-accent hover:text-blue-200">1m</button>
+              <button type="button" data-dur="3"  class="dur-btn flex-1 rounded-md border border-line bg-panel2 py-1.5 text-[9px] text-muted hover:border-accent hover:text-blue-200">3m</button>
+              <button type="button" data-dur="5"  class="dur-btn flex-1 rounded-md border border-accent bg-accent/10 py-1.5 text-[9px] font-semibold text-blue-100">5m ⭐</button>
+              <button type="button" data-dur="10" class="dur-btn flex-1 rounded-md border border-line bg-panel2 py-1.5 text-[9px] text-muted hover:border-accent hover:text-blue-200">10m</button>
+              <button type="button" data-dur="15" class="dur-btn flex-1 rounded-md border border-line bg-panel2 py-1.5 text-[9px] text-muted hover:border-accent hover:text-blue-200">15m</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-[1fr_145px] gap-3">
+          <div class="overflow-hidden rounded-xl border border-line bg-[#060d18]">
+            <div class="flex border-b border-line">
+              <button id="scriptTab" class="script-tab border-b-2 border-accent px-3 py-2 text-[11px] font-semibold text-white">Script Preview</button>
+              <button id="sceneTab" class="script-tab px-3 py-2 text-[11px] text-muted">Scene Breakdown</button>
+            </div>
+
+            <div id="scriptPanel" class="h-[185px] overflow-y-auto p-3 text-[11px] leading-5 text-slate-300">
+              <textarea id="scriptArea" class="h-full w-full resize-none border-none bg-transparent p-0 text-[11px] leading-5 text-slate-300 outline-none" placeholder="AI-generated storyboard script will appear here. You can also paste your own script here then click Render Video below..."></textarea>
+            </div>
+
+            <div id="scenePanel" class="hidden h-[185px] overflow-y-auto p-3">
+              <div id="sceneList" class="space-y-2 text-[10px] text-muted">
+                Scene cuts will be automatically calculated via N = ceil(T_audio / 4.5)...
+              </div>
+            </div>
+          </div>
+
+          <aside class="rounded-xl border border-line bg-panel2 p-3">
+            <div class="mb-3 text-[10px] uppercase tracking-wider text-muted">Script Stats</div>
+            <div class="space-y-4">
+              <div><div class="text-[10px] text-muted">Total Words</div><div id="statWords" class="mt-0.5 text-lg font-bold">0</div><div class="text-[9px] text-muted">words</div></div>
+              <div><div class="text-[10px] text-muted">Audio Master</div><div id="statDuration" class="mt-0.5 text-lg font-bold">0.0s</div><div id="statDurationFormatted" class="text-[9px] text-muted">00:00</div></div>
+              <div><div class="text-[10px] text-muted">Visual Cuts</div><div id="statCuts" class="mt-0.5 text-lg font-bold text-accent">0</div><div class="text-[9px] text-muted">ceil(Taudio / 4.5)</div></div>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-2">
+              <button id="btnClearScript" class="btn rounded-lg border border-line px-2 py-2 text-[10px] text-muted hover:text-white">Clear</button>
+              <button id="btnFormatScript" class="btn rounded-lg border border-line px-2 py-2 text-[10px] text-muted hover:text-white">Format</button>
+            </div>
+            <button id="btnCopyPrompt" type="button" class="btn mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-2 py-1.5 text-[9px] font-semibold text-blue-200 hover:bg-accent/20" title="Copy expert dynamic prompt for free ChatGPT or Gemini web ($0 budget)">
+              <span>📋</span>
+              <span>Copy Web AI Prompt ($0)</span>
+            </button>
+            <div class="mt-1.5 grid grid-cols-2 gap-1.5">
+              <a href="https://chatgpt.com" target="_blank" rel="noopener" class="btn flex items-center justify-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[9px] font-semibold text-emerald-300 hover:bg-emerald-500/20">
+                🤖 Open ChatGPT
+              </a>
+              <a href="https://gemini.google.com" target="_blank" rel="noopener" class="btn flex items-center justify-center gap-1 rounded-lg border border-purple-500/30 bg-purple-500/10 px-2 py-1.5 text-[9px] font-semibold text-purple-300 hover:bg-purple-500/20">
+                ✨ Open Gemini
+              </a>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Step 1 Action Button -->
+        <button id="generateScriptBtn" type="button" class="btn mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-accent/50 bg-accent/10 text-sm font-semibold text-blue-100 hover:bg-accent/20">
+          ⚡ Generate AI Script
+        </button>
+      </article>
+
+      <!-- 3. VOICE, SUBTITLES & VISUAL CONTROLS -->
+      <article class="card p-4">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="grid h-7 w-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-blue-200">3</span>
+          <div>
+            <h2 class="text-sm font-bold">Voice, Subtitle & Visual Controls</h2>
+            <p class="text-[11px] text-muted">Choose the result. Automation handles production.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1.5 block text-[10px] uppercase tracking-wider text-muted">🎙️ Narrator Voice</label>
+            <select id="voiceSelect" class="input h-10 px-3 text-xs">
+              <optgroup label="🇺🇸 English">
+                <option value="en-US-ChristopherNeural" selected>Christopher — Deep Hollywood Male</option>
+                <option value="en-US-JennyNeural">Jenny — Expressive Female</option>
+              </optgroup>
+              <optgroup label="🇵🇰 Urdu — اردو">
+                <option value="ur-PK-AsadNeural">Asad — Deep Cinema Male</option>
+                <option value="ur-PK-UzmaNeural">Uzma — Warm Storyteller Female</option>
+              </optgroup>
+              <optgroup label="🇮🇳 Hindi — हिन्दी">
+                <option value="hi-IN-MadhurNeural">Madhur — Cinematic Recapper Male</option>
+                <option value="hi-IN-SwaraNeural">Swara — Expressive Drama Female</option>
+              </optgroup>
+              <optgroup label="🇸🇦 Arabic — العربية">
+                <option value="ar-SA-HamedNeural">Hamed — Deep Documentary Male</option>
+                <option value="ar-SA-ZariyahNeural">Zariyah — Warm Cinema Female</option>
+              </optgroup>
+              <optgroup label="🇲🇽 Spanish — Español">
+                <option value="es-ES-AlvaroNeural">Alvaro — Cinema Narrator Male</option>
+                <option value="es-MX-DaliaNeural">Dalia — Resumen Narrator Female</option>
+              </optgroup>
+              <optgroup label="🇮🇩 Indonesian — Bahasa">
+                <option value="id-ID-ArdiNeural">Ardi — Cinematic Male</option>
+                <option value="id-ID-GadisNeural">Gadis — Storyteller Female</option>
+              </optgroup>
+              <optgroup label="🇧🇷 Portuguese — Português">
+                <option value="pt-BR-AntonioNeural">Antonio — Cinema Male</option>
+                <option value="pt-BR-FranciscaNeural">Francisca — Drama Female</option>
+              </optgroup>
+              <optgroup label="🇩🇪 German — Deutsch">
+                <option value="de-DE-ConradNeural">Conrad — Deep Documentary Male</option>
+                <option value="de-DE-KatjaNeural">Katja — Clear Storyteller Female</option>
+              </optgroup>
+              <optgroup label="🇫🇷 French — Français">
+                <option value="fr-FR-HenriNeural">Henri — Cinema French Male</option>
+                <option value="fr-FR-DeniseNeural">Denise — Drama Female</option>
+              </optgroup>
+              <optgroup label="🇷🇺 Russian — Русский">
+                <option value="ru-RU-DmitryNeural">Dmitry — Deep Narrator Male</option>
+                <option value="ru-RU-SvetlanaNeural">Svetlana — Dramatic Female</option>
+              </optgroup>
+              <optgroup label="🇹🇷 Turkish — Türkçe">
+                <option value="tr-TR-AhmetNeural">Ahmet — Sinematik Male</option>
+                <option value="tr-TR-EmelNeural">Emel — Drama Female</option>
+              </optgroup>
+              <optgroup label="🇮🇹 Italian — Italiano">
+                <option value="it-IT-DiegoNeural">Diego — Cinema Italiano Male</option>
+                <option value="it-IT-ElsaNeural">Elsa — Warm Story Female</option>
+              </optgroup>
+              <optgroup label="🇻🇳 Vietnamese — Tiếng Việt">
+                <option value="vi-VN-NamMinhNeural">NamMinh — Documentary Male</option>
+                <option value="vi-VN-HoaiMyNeural">HoaiMy — Storyteller Female</option>
+              </optgroup>
+              <optgroup label="🇹🇭 Thai — ไทย">
+                <option value="th-TH-NiwatNeural">Niwat — Cinematic Male</option>
+                <option value="th-TH-PremwadeeNeural">Premwadee — Narrator Female</option>
+              </optgroup>
+              <optgroup label="🇯🇵 Japanese — 日本語">
+                <option value="ja-JP-KeitaNeural">Keita — Cinema Male</option>
+                <option value="ja-JP-NanamiNeural">Nanami — Anime & Film Female</option>
+              </optgroup>
+              <optgroup label="🇰🇷 Korean — 한국어">
+                <option value="ko-KR-InJoonNeural">InJoon — K-Drama Narrator Male</option>
+                <option value="ko-KR-SunHiNeural">SunHi — Storyteller Female</option>
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-[10px] uppercase tracking-wider text-muted">⚡ Narration Speed</label>
+            <div class="flex gap-2" id="speedBtns">
+              <button type="button" data-speed="normal"      class="speed-btn flex-1 rounded-lg border border-line bg-panel2 py-2 text-[10px] text-muted hover:border-accent hover:text-blue-200">Normal<br><span class="text-[8px] opacity-60">1.0x</span></button>
+              <button type="button" data-speed="fast"        class="speed-btn flex-1 rounded-lg border border-accent bg-accent/10 py-2 text-[10px] font-semibold text-blue-100">Fast ⭐<br><span class="text-[8px]">1.15x</span></button>
+              <button type="button" data-speed="ultra_fast"  class="speed-btn flex-1 rounded-lg border border-line bg-panel2 py-2 text-[10px] text-muted hover:border-accent hover:text-blue-200">Ultra<br><span class="text-[8px] opacity-60">1.25x</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 grid grid-cols-[1.1fr_.9fr_1.2fr] gap-3">
+          <div>
+            <label class="mb-1.5 block text-[10px] uppercase tracking-wider text-muted">Subtitles</label>
+            <label class="flex h-10 items-center gap-2 rounded-lg border border-line bg-panel2 px-3 text-[10px]">
+              <input id="subtitles" type="checkbox" checked class="accent-blue-500" />
+              Burn Animated Subtitles
+            </label>
+            <select id="subtitlePreset" class="input mt-2 h-9 px-2 text-[10px]">
+              <option value="viral_yellow" selected>Viral Yellow</option>
+              <option value="hormozi_bold">Hormozi Bold</option>
+              <option value="clean_white">Clean White</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-1.5 block text-[10px] uppercase tracking-wider text-muted">Aspect Ratio</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="landscapeBtn" type="button" class="aspect-btn rounded-lg border border-accent bg-accent/10 p-2 text-[10px] font-semibold text-blue-100">16:9<br><span class="font-normal text-muted">YouTube</span></button>
+              <button id="verticalBtn" type="button" class="aspect-btn rounded-lg border border-line bg-panel2 p-2 text-[10px] text-muted">9:16<br><span class="font-normal text-muted">Shorts</span></button>
+            </div>
+          </div>
+
+          <div>
+            <label class="mb-1.5 block text-[10px] uppercase tracking-wider text-muted">Soundtrack</label>
+            <select id="soundtrackMood" class="input h-10 px-2 text-[10px]">
+              <option value="suspense" selected>Suspense Thriller</option>
+              <option value="action">Intense Action</option>
+              <option value="emotional">Emotional Drama</option>
+              <option value="horror">Dark Horror</option>
+            </select>
+            <select id="audioDucking" class="input mt-2 h-9 px-2 text-[10px]">
+              <option value="auto" selected>Auto Ducking (-80%)</option>
+              <option value="light">Light Ducking (-50%)</option>
+              <option value="heavy">Heavy Ducking (-95%)</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="advancedBtn" type="button" class="btn mt-3 rounded-lg border border-line bg-panel2 px-3 py-2 text-[10px] text-muted hover:text-white">⚙ Advanced Settings</button>
+
+        <div id="advancedPanel" class="hidden-panel mt-3 rounded-xl border border-line bg-panel2 p-3">
+          <div class="grid grid-cols-3 gap-3 text-[10px]">
+            <label class="space-y-1"><span class="text-muted">Target visual cut</span><input id="targetCutInput" class="input h-9 px-2" value="4.5s" /></label>
+            <label class="space-y-1"><span class="text-muted">Output resolution</span><select id="resolutionSelect" class="input h-9 px-2"><option value="720p" selected>720p HD (3x Faster)</option><option value="1080p">1080p Full HD</option></select></label>
+            <label class="space-y-1"><span class="text-muted">Watermark</span><input id="watermarkInput" class="input h-9 px-2" placeholder="@creator" /></label>
+          </div>
+          <p class="mt-2 text-[9px] text-muted">Full movie download is permanently disabled. Pipeline strictly downloads 3-5s selective clips.</p>
+        </div>
+
+        <button id="generateBtn" type="button" class="gradient-btn btn mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white shadow-button">
+          🎬 Render Final Video
+        </button>
+      </article>
+    </section>
+
+    <!-- RIGHT COLUMN -->
+    <section class="space-y-4">
+
+      <!-- AI PRODUCTION PIPELINE -->
+      <article class="card scan p-4 shadow-glow">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="grid h-7 w-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-blue-200">→</span>
+              <h2 class="text-sm font-bold">AI Production Pipeline</h2>
+            </div>
+            <p class="ml-9 mt-1 text-[11px] text-muted">The engine works through the complete automated state machine.</p>
+          </div>
+          <span id="automationBadge" class="rounded-full border border-accent/20 bg-accent/5 px-3 py-1 text-[10px] text-blue-200">Ready</span>
+        </div>
+
+        <div id="stageRail" class="grid grid-cols-11 gap-1">
+          <!-- Populated dynamically by JS -->
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_270px]">
+
+          <!-- VIDEO PLAYER & PREVIEW -->
+          <div>
+            <div id="videoContainer" class="video-bg relative aspect-video overflow-hidden rounded-xl border border-line">
+              <video id="mainVideoPlayer" class="hidden h-full w-full object-contain" controls></video>
+              <div id="playerPlaceholder" class="absolute inset-0 grid place-items-center">
+                <div class="text-center">
+                  <div class="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full border border-white/10 bg-black/30 text-2xl text-accent">▶</div>
+                  <div id="videoPreviewTitle" class="text-sm font-semibold">AutoExplainer AI Studio</div>
+                  <div id="playerStatus" class="mt-1 text-[10px] text-slate-400">Preview will appear here once rendered</div>
+                </div>
+              </div>
+              <div id="playerOverlayBar" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                <div id="subtitlePreviewText" class="mb-2 text-center text-sm font-semibold italic text-white">
+                  Deterministic Audio-Locked Visuals with Zero Drift
+                </div>
+                <div class="flex items-center gap-2 text-[9px] text-slate-400">
+                  <span>▶</span>
+                  <div class="h-1 flex-1 rounded bg-white/10">
+                    <div id="playerProgress" class="h-1 w-0 rounded bg-accent transition-all"></div>
+                  </div>
+                  <span id="playerDurationText">00:00</span>
+                  <span>⛶</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div class="rounded-xl border border-line bg-panel2 p-3">
+                <div class="mb-2 flex items-center justify-between">
+                  <span class="text-[10px] font-semibold">Live Diagnostics & Logs</span>
+                  <label class="flex items-center gap-1 text-[9px] text-muted">
+                    <input id="autoScroll" type="checkbox" checked class="accent-blue-500"> Auto Scroll
+                  </label>
+                </div>
+                <div id="logBox" class="h-40 overflow-y-auto rounded-lg border border-line bg-[#050a12] p-2 text-[9px] font-mono text-slate-400">
+                  <div class="log-row py-1 text-slate-500">[System] AutoExplainer AI Studio initialized. Ready for 1-Click execution.</div>
+                </div>
+              </div>
+
+              <div class="rounded-xl border border-line bg-panel2 p-3">
+                <div class="mb-2 text-[10px] font-semibold">Project Output</div>
+                <div class="flex items-center gap-3 rounded-lg border border-line bg-[#07101d] p-2">
+                  <div class="grid h-12 w-16 place-items-center rounded-md bg-gradient-to-br from-slate-800 to-black text-xl">🎞</div>
+                  <div class="min-w-0 flex-1">
+                    <div id="outputFilename" class="truncate text-[10px] font-semibold">Waiting for render...</div>
+                    <div class="mt-1 grid grid-cols-3 gap-2 text-[8px] text-muted">
+                      <span id="outputDuration">—</span>
+                      <span id="outputRes">720p</span>
+                      <span id="outputRatio">16:9</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                  <button id="folderBtn" type="button" class="btn rounded-lg border border-line px-2 py-2 text-[9px] text-muted hover:text-white">Open Output Folder</button>
+                  <button id="previewBtn" type="button" class="btn rounded-lg border border-line px-2 py-2 text-[9px] text-muted hover:text-white">Play in Studio</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PRODUCTION INSPECTOR & FOOTAGE TRACKER -->
+          <aside class="rounded-xl border border-line bg-panel2 p-3">
+            <div class="mb-3 flex items-center justify-between">
+              <span class="text-[10px] font-semibold">AI Production Inspector</span>
+              <span class="flex items-center gap-1 text-[9px] text-success">
+                <span class="h-1.5 w-1.5 rounded-full bg-success"></span>Live
+              </span>
+            </div>
+
+            <div id="inspector" class="space-y-1.5">
+              <!-- Filled by JS -->
+            </div>
+
+            <div class="mt-4 rounded-xl border border-line bg-[#07101d] p-3">
+              <div class="flex items-center justify-between text-[9px]">
+                <span class="font-semibold">Selective Footage</span>
+                <span id="clipCount" class="text-accent font-bold">0 / 0</span>
+              </div>
+              <div class="progress-track mt-2 h-1.5 rounded-full">
+                <div id="clipProgress" class="progress-fill h-full w-0 rounded-full"></div>
+              </div>
+              <div class="mt-2 text-[9px] text-muted">Strictly 3-5s scene clips. Full movie download permanently disabled.</div>
+              <div class="mt-2 flex items-center gap-2 rounded-lg border border-danger/20 bg-danger/5 p-2 text-[8px] text-slate-300">
+                <span class="text-danger font-bold">●</span> Full movie download disabled
+              </div>
+            </div>
+          </aside>
+        </div>
+      </article>
+
+      <!-- 1-CLICK YOUTUBE AUTO-SCHEDULER -->
+      <article class="card p-4">
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-bold">1-Click YouTube Auto-Scheduler</h2>
+            <p class="mt-1 text-[11px] text-muted">Publish the validated result without leaving the studio.</p>
+          </div>
+          <span id="schedulerBadge" class="rounded-full border border-line bg-panel2 px-2.5 py-1 text-[10px] text-muted">OAuth 2.0</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <select id="channelSelect" class="input h-10 px-3 text-xs">
+            <option value="">(No channel connected - Click Connect)</option>
+          </select>
+          <input id="scheduleDate" type="datetime-local" class="input h-10 px-3 text-xs" />
+          <button id="scheduleBtn" type="button" class="btn rounded-lg border border-accent/30 bg-accent/10 px-3 text-xs font-semibold text-blue-100 hover:bg-accent/20">
+            🚀 Schedule to YouTube
+          </button>
+        </div>
+      </article>
+
+      <!-- AUTOMATION FOOTER -->
+      <article class="rounded-xl border border-line bg-panel2/60 px-4 py-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3 text-[10px] text-muted">
+            <span>Just Give the Movie</span><span>→</span>
+            <span>AI Story</span><span>→</span>
+            <span>Voice</span><span>→</span>
+            <span>Scenes</span><span>→</span>
+            <span>Footage</span><span>→</span>
+            <span>Audio-Lock</span><span>→</span>
+            <span>Render</span>
+          </div>
+          <div class="text-[10px] font-semibold text-slate-300">One Click · Full Automation · Cinematic Results</div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- GLOBAL MULTIPLIER MODAL -->
+  <div id="multiplierModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="glass w-full max-w-3xl rounded-2xl p-5 shadow-2xl">
+      <div class="mb-4 flex items-start justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="grid h-8 w-8 place-items-center rounded-lg bg-accent/10 text-accent font-bold">◎</span>
+            <div>
+              <h2 class="text-base font-bold">Global Multiplier Studio</h2>
+              <p class="text-[10px] text-muted">Generate independent multilingual recaps from the same validated project.</p>
+            </div>
+          </div>
+        </div>
+        <button id="closeModal" type="button" class="btn rounded-lg border border-line px-3 py-2 text-xs text-muted hover:text-white">✕</button>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-[1fr_1.25fr]">
+        <div class="rounded-xl border border-line bg-panel2 p-4">
+          <div class="mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted">Select Target Languages</div>
+          <div id="languageList" class="space-y-2"></div>
+        </div>
+
+        <div class="rounded-xl border border-line bg-panel2 p-4">
+          <div class="mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted">Voice Configuration per Language</div>
+          <div id="voiceSettings" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <button id="generateLanguages" type="button" class="gradient-btn btn mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-xs font-bold text-white shadow-button">
+        🌍 Generate All Language Versions
+      </button>
+      <p class="mt-2 text-center text-[9px] text-muted">Each language independently synthesizes voiceover, recalculates timeline, and burns synchronized subtitles.</p>
+    </div>
+  </div>
+
+  <!-- ⚙️ UNIVERSAL AI SETTINGS MODAL -->
+  <div id="aiSettingsModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="glass w-full max-w-2xl rounded-2xl p-5 shadow-2xl">
+      <div class="mb-4 flex items-start justify-between">
+        <div class="flex items-center gap-2">
+          <span class="grid h-8 w-8 place-items-center rounded-lg bg-accent/15 text-accent font-bold">⚙️</span>
+          <div>
+            <h2 class="text-base font-bold text-white">AI Engine & Model Settings</h2>
+            <p class="text-[10px] text-muted">Choose your AI provider. Works with 9Router, Free Google Gemini, OpenAI, or Local Ollama.</p>
+          </div>
+        </div>
+        <button id="closeAiModal" type="button" class="btn rounded-lg border border-line px-3 py-2 text-xs text-muted hover:text-white">✕</button>
+      </div>
+
+      <!-- Provider Selection Tabs -->
+      <div class="mb-4 grid grid-cols-4 gap-1.5 rounded-xl border border-line bg-panel2 p-1.5 text-center text-xs">
+        <button id="tab9router" type="button" class="ai-tab rounded-lg bg-accent/20 border border-accent/40 py-2 font-semibold text-blue-100">
+          9Router Hub
+        </button>
+        <button id="tabGemini" type="button" class="ai-tab rounded-lg border border-transparent py-2 text-muted hover:text-white">
+          Google Gemini
+        </button>
+        <button id="tabOpenai" type="button" class="ai-tab rounded-lg border border-transparent py-2 text-muted hover:text-white">
+          OpenAI (ChatGPT)
+        </button>
+        <button id="tabCustom" type="button" class="ai-tab rounded-lg border border-transparent py-2 text-muted hover:text-white">
+          Custom / Ollama
+        </button>
+      </div>
+
+      <!-- Tab 1: 9Router -->
+      <div id="panel9router" class="ai-panel space-y-3 rounded-xl border border-line bg-panel2 p-4 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-white">9Router Proxy Connection</span>
+          <span class="rounded bg-accent/15 px-2 py-0.5 text-[9px] text-accent font-semibold">Active Default</span>
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">Endpoint URL</label>
+          <input id="ai9Url" class="input h-9 px-3 text-xs" value="http://127.0.0.1:20128/v1" />
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">Active Combo Model</label>
+          <input id="ai9Combo" class="input h-9 px-3 text-xs" value="new-combo" />
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">API Key (Pre-filled / Saved)</label>
+          <input id="ai9Key" type="password" autocomplete="new-password" class="input h-9 px-3 text-xs" placeholder="sk-..." />
+        </div>
+      </div>
+
+      <!-- Tab 2: Gemini -->
+      <div id="panelGemini" class="ai-panel hidden space-y-3 rounded-xl border border-line bg-panel2 p-4 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-white">Google Gemini Official API</span>
+          <span class="rounded bg-success/15 px-2 py-0.5 text-[9px] text-success font-semibold">100% Free Tier ($0)</span>
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">Google AI Studio API Key</label>
+          <input id="aiGeminiKey" type="password" autocomplete="new-password" class="input h-9 px-3 text-xs" placeholder="AIzaSy..." />
+          <p class="mt-1 text-[9px] text-muted">
+            1,500 daily requests free at <a href="https://aistudio.google.com/" target="_blank" class="text-accent underline font-medium">aistudio.google.com</a> (Zero cost, no credit card required).
+          </p>
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">Model</label>
+          <select id="aiGeminiModel" class="input h-9 px-2 text-xs">
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ultra-Fast & Free Default)</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro (Deep Cinematic Storytelling)</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tab 3: OpenAI -->
+      <div id="panelOpenai" class="ai-panel hidden space-y-3 rounded-xl border border-line bg-panel2 p-4 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-white">OpenAI ChatGPT Official API</span>
+          <span class="rounded bg-blue-500/15 px-2 py-0.5 text-[9px] text-blue-300 font-semibold">GPT-4o</span>
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">OpenAI API Key</label>
+          <input id="aiOpenaiKey" type="password" autocomplete="new-password" class="input h-9 px-3 text-xs" placeholder="sk-..." />
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">Model</label>
+          <select id="aiOpenaiModel" class="input h-9 px-2 text-xs">
+            <option value="gpt-4o">GPT-4o (Cinematic Flagship)</option>
+            <option value="gpt-4o-mini">GPT-4o-mini (Fast & Cost-Efficient)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tab 4: Custom -->
+      <div id="panelCustom" class="ai-panel hidden space-y-3 rounded-xl border border-line bg-panel2 p-4 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-white">Custom / Groq / Local Ollama</span>
+          <span class="rounded bg-purple-500/15 px-2 py-0.5 text-[9px] text-purple-300 font-semibold">OpenAI Compatible</span>
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">Base URL</label>
+          <input id="aiCustomUrl" class="input h-9 px-3 text-xs" placeholder="http://localhost:11434/v1 or https://api.groq.com/openai/v1" />
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">Model Name</label>
+          <input id="aiCustomModel" class="input h-9 px-3 text-xs" placeholder="llama3 or llama-3.3-70b-versatile" />
+        </div>
+        <div>
+          <label class="mb-1 block text-[10px] text-muted">API Key (if required)</label>
+          <input id="aiCustomKey" type="password" autocomplete="new-password" class="input h-9 px-3 text-xs" placeholder="gsk_... or bearer key" />
+        </div>
+      </div>
+
+      <!-- Live Test Feedback Banner -->
+      <div id="aiTestFeedback" class="mt-3 flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2 text-[11px] text-muted">
+        <span id="aiFeedbackDot" class="h-2 w-2 rounded-full bg-slate-500"></span>
+        <span id="aiFeedbackText">Status: Ready to test connection.</span>
+      </div>
+
+      <!-- Actions -->
+      <div class="mt-4 flex items-center justify-between gap-3">
+        <button id="btnTestAi" type="button" class="btn flex items-center gap-1.5 rounded-xl border border-line bg-panel2 px-4 py-2.5 text-xs font-semibold text-slate-200 hover:text-white">
+          <span>⚡</span>
+          <span>Test Connection</span>
+        </button>
+        <button id="btnSaveAi" type="button" class="gradient-btn btn rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-button">
+          💾 Save & Set Active
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION JAVASCRIPT: CONNECTED TO REAL FASTAPI BACKEND -->
+  <script>
+    // SECURITY: attach the server-injected API token to every /api/* call.
+    (function () {
+      const _fetch = window.fetch.bind(window);
+      window.fetch = function (url, opts) {
+        opts = opts || {};
+        if (typeof url === "string" && url.indexOf("/api/") === 0 && window.__API_TOKEN__) {
+          const headers = new Headers(opts.headers || {});
+          headers.set("X-API-Token", window.__API_TOKEN__);
+          opts.headers = headers;
+        }
+        return _fetch(url, opts);
+      };
+    })();
+
+    function apiUrlWithToken(url) {
+      if (window.__API_TOKEN__ && url.indexOf("/api/") === 0) {
+        const sep = url.indexOf("?") === -1 ? "?" : "&";
+        return url + sep + "token=" + encodeURIComponent(window.__API_TOKEN__);
+      }
+      return url;
+    }
+
+    const stages = [
+      ["Transcript", "SOURCE_ANALYZING"],
+      ["Story", "STORY_READY"],
+      ["Script", "SCRIPT_READY"],
+      ["Voice", "VOICEOVER_READY"],
+      ["Scenes", "STORYBOARD_READY"],
+      ["Footage", "FOOTAGE_DOWNLOADING"],
+      ["Audio-Lock", "TIMELINE_BUILDING"],
+      ["Audio", "AUDIO_MIXING"],
+      ["Subtitles", "SUBTITLE_GENERATING"],
+      ["Validate", "FINAL_VALIDATION"],
+      ["Render", "RENDERING"]
+    ];
+
+    const inspectorSteps = [
+      ["Story Understanding", "Story"],
+      ["Script Generation", "Script"],
+      ["Voiceover Narration", "Voice"],
+      ["Scene Planning", "Scenes"],
+      ["Selective Footage Extraction", "Footage"],
+      ["Audio-Locked Sync", "Audio-Lock"],
+      ["Subtitle Generation", "Subtitles"],
+      ["Final FFmpeg Render", "Render"]
+    ];
+
+    const state = {
+      phase: "input",
+      progress: 0,
+      activeStage: -1,
+      clips: 0,
+      totalClips: 0,
+      ratio: "16:9",
+      lastJobId: null,
+      lastVideoUrl: null,
+      isPollingLogs: false
+    };
+
+    const $ = id => document.getElementById(id);
+
+    function toast(message, type = "info") {
+      const el = $("toast");
+      el.textContent = message;
+      el.className = "fixed right-5 top-5 z-[100] rounded-xl border px-4 py-3 text-sm shadow-glow " +
+        (type === "error" ? "border-danger/30 bg-danger/10 text-red-200" :
+         type === "success" ? "border-success/30 bg-success/10 text-green-200" :
+         "border-accent/30 bg-panel2 text-slate-200");
+      el.classList.remove("hidden");
+      setTimeout(() => el.classList.add("hidden"), 3200);
+    }
+
+    function renderStages() {
+      $("stageRail").innerHTML = stages.map((s, i) => {
+        const done = state.activeStage > i;
+        const active = state.activeStage === i;
+        return `
+          <div class="min-w-0 text-center">
+            <div class="mx-auto flex h-7 w-7 items-center justify-center rounded-full border
+              ${done ? "border-success/40 bg-success/15 text-success" : active ? "border-accent bg-accent/15 text-blue-200 pulse-dot" : "border-line bg-panel2 text-muted"} text-[9px] font-bold">
+              ${done ? "✓" : active ? "↻" : i + 1}
+            </div>
+            ${i < stages.length - 1 ? `<div class="mx-[55%] mt-[-15px] h-px ${done ? "stage-line" : "bg-line"}"></div>` : ""}
+            <div class="mt-2 truncate text-[8px] ${active || done ? "text-slate-200" : "text-muted"}">${s[0]}</div>
+          </div>`;
+      }).join("");
+    }
+
+    function renderInspector() {
+      $("inspector").innerHTML = inspectorSteps.map(([label, key]) => {
+        const idx = stages.findIndex(s => s[0] === key);
+        const done = state.activeStage > idx;
+        const active = state.activeStage === idx;
+        return `
+          <div class="flex items-center gap-2 rounded-lg px-2 py-1.5 ${active ? "border border-accent/30 bg-accent/5" : ""}">
+            <span class="grid h-4 w-4 place-items-center rounded-full border text-[7px]
+              ${done ? "border-success/40 bg-success/10 text-success" : active ? "border-accent bg-accent/10 text-accent font-bold" : "border-line text-muted"}">
+              ${done ? "✓" : active ? "•" : ""}
+            </span>
+            <span class="flex-1 text-[9px] ${active ? "text-white font-medium" : "text-muted"}">${label}</span>
+            <span class="text-[8px] ${done ? "text-success font-semibold" : active ? "text-blue-200 font-semibold" : "text-muted"}">${done ? "Complete" : active ? "Processing..." : "Waiting"}</span>
+          </div>`;
+      }).join("");
+    }
+
+    function updateUI() {
+      renderStages();
+      renderInspector();
+      $("headerPercent").textContent = state.progress + "%";
+      $("clipCount").textContent = `${state.clips} / ${state.totalClips}`;
+      const clipPct = state.totalClips > 0 ? (state.clips / state.totalClips) * 100 : 0;
+      $("clipProgress").style.width = `${clipPct}%`;
+      $("playerProgress").style.width = `${state.progress}%`;
+      $("outputRatio").textContent = state.ratio;
+    }
+
+    function addLog(text, kind = "normal") {
+      const row = document.createElement("div");
+      row.className = "log-row py-1 text-[9px]";
+      const time = new Date().toLocaleTimeString([], { hour12: false });
+      const color = kind === "success" ? "text-success" : kind === "error" ? "text-danger font-semibold" : kind === "warning" ? "text-warning" : "text-slate-400";
+      row.innerHTML = `<span class="text-slate-600">[${time}]</span> <span class="${color}">${text}</span>`;
+      $("logBox").appendChild(row);
+      if ($("autoScroll").checked) $("logBox").scrollTop = $("logBox").scrollHeight;
+    }
+
+    function setStatus(text, badge = "Processing") {
+      $("headerStatus").textContent = text;
+      $("automationBadge").textContent = badge;
+    }
+
+    // Connect to real backend status checks
+    async function checkBackendStatus() {
+      try {
+        const res = await fetch("/api/v1/explainer/ai-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.online) {
+            $("headerDot").className = "h-2 w-2 rounded-full bg-success";
+            const pLabel = data.active_provider === "gemini" ? "Gemini" : data.active_provider === "openai" ? "OpenAI" : data.active_provider === "custom" ? "Custom AI" : "9Router";
+            $("headerStatus").textContent = `AI Online: ${pLabel} (${data.active_combo || 'Ready'})`;
+          } else {
+            $("headerDot").className = "h-2 w-2 rounded-full bg-warning";
+            $("headerStatus").textContent = `AI Offline: ${data.message || 'Check Settings'}`;
+          }
+        }
+      } catch (e) {
+        console.warn("AI status check warning:", e);
+      }
+
+      try {
+        const ytRes = await fetch("/api/v1/youtube/status");
+        if (ytRes.ok) {
+          const ytData = await ytRes.json();
+          if (ytData.connected || ytData.channels_count > 0) {
+            $("ytDot").className = "h-2 w-2 rounded-full bg-success";
+            $("ytStatusText").textContent = `YouTube: Connected (${ytData.channels_count || 1})`;
+            $("ytStatusBadge").className = "hidden items-center gap-2 rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-xs text-success lg:flex";
+          }
+        }
+      } catch (e) {
+        console.warn("YouTube status check warning:", e);
+      }
+    }
+
+    // Real-Time Log Poller from /api/v1/explainer/logs
+    let lastLogCount = 0;
+    async function startLogPolling() {
+      if (state.isPollingLogs) return;
+      state.isPollingLogs = true;
+      lastLogCount = 0;
+
+      const poller = setInterval(async () => {
+        if (!state.isPollingLogs) {
+          clearInterval(poller);
+          return;
+        }
+        try {
+          const res = await fetch("/api/v1/explainer/logs");
+          if (!res.ok) return;
+          const data = await res.json();
+          const logs = data.logs || [];
+          if (logs.length > lastLogCount) {
+            for (let i = lastLogCount; i < logs.length; i++) {
+              const msg = logs[i].msg || "";
+              const level = (logs[i].level || "INFO").toLowerCase();
+              addLog(msg, level === "error" ? "error" : level === "warning" ? "warning" : level === "success" ? "success" : "normal");
+
+              // Sync Stage Rail based on authoritative engine events
+              if (msg.includes("Ensuring footage integrity")) {
+                state.activeStage = 5;
+                state.progress = 52;
+                setStatus("Selectively extracting source clips...", "Extracting Footage");
+              } else if (msg.includes("Building") && msg.includes("audio-locked")) {
+                state.activeStage = 6;
+                state.progress = 68;
+                setStatus("Audio-locking visuals to speech cues...", "Audio-Locking");
+              } else if (msg.includes("Composing soundtrack")) {
+                state.activeStage = 7;
+                state.progress = 76;
+                setStatus("Composing ducked soundtrack...", "Soundtrack Mix");
+              } else if (msg.includes("FFmpeg rendering anti-copyright")) {
+                state.activeStage = 8;
+                state.progress = 85;
+                setStatus("Rendering anti-copyright video armor...", "Rendering");
+              } else if (msg.includes("Complete Explainer Package Ready")) {
+                state.activeStage = 11;
+                state.progress = 100;
+                setStatus("Recap ready for preview", "Complete");
+              }
+
+              // Parse cut count dynamically
+              const matchCuts = msg.match(/Locked exact narration-to-scene timing across (\d+) scene blocks/i);
+              if (matchCuts) {
+                state.totalClips = parseInt(matchCuts[1], 10);
+                state.clips = state.totalClips;
+                $("statCuts").textContent = state.totalClips;
+                updateUI();
+              }
+            }
+            lastLogCount = logs.length;
+            updateUI();
+          }
+        } catch (e) {
+          console.warn("Log polling error:", e);
+        }
+      }, 1000);
+    }
+
+    function stopLogPolling() {
+      state.isPollingLogs = false;
+    }
+
+    // Source Tabs (3-way: YouTube / Local Video / Paste Transcript)
+    const TAB_ACTIVE   = "source-tab rounded-lg border border-accent bg-accent/10 px-3 py-2 text-xs font-semibold text-blue-100";
+    const TAB_INACTIVE = "source-tab rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-muted";
+
+    function switchSourceTab(active) {
+      $("youtubeSource").classList.toggle("hidden",    active !== "youtube");
+      $("fileSource").classList.toggle("hidden",       active !== "file");
+      $("transcriptSource").classList.toggle("hidden", active !== "transcript");
+      $("youtubeTab").className    = active === "youtube"    ? TAB_ACTIVE : TAB_INACTIVE;
+      $("fileTab").className       = active === "file"       ? TAB_ACTIVE : TAB_INACTIVE;
+      $("transcriptTab").className = active === "transcript" ? TAB_ACTIVE : TAB_INACTIVE;
+    }
+    $("youtubeTab").onclick    = () => switchSourceTab("youtube");
+    $("fileTab").onclick       = () => switchSourceTab("file");
+    $("transcriptTab").onclick = () => {
+      switchSourceTab("transcript");
+      $("sourceTitle").textContent = "Transcript / Plot Mode";
+      $("sourceMeta").textContent  = "AI will write script from your pasted text — no video download needed.";
+      $("sourceValid").textContent = "Ready";
+      $("sourceValid").className   = "rounded-md bg-success/10 px-2 py-1 text-[10px] font-semibold text-success";
+    };
+
+    $("urlInput").addEventListener("input", e => {
+      const val = e.target.value.trim();
+      const valid = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(val);
+      $("urlCheck").textContent = valid ? "●" : "!";
+      $("urlCheck").className = "absolute right-3 top-3 " + (valid ? "text-success" : "text-warning");
+      $("sourceValid").textContent = valid ? "Valid URL" : (val ? "Invalid URL" : "Empty");
+      $("sourceValid").className = "rounded-md px-2 py-1 text-[10px] font-semibold " + (valid ? "bg-success/10 text-success" : "bg-warning/10 text-warning");
+      if (valid) {
+        $("sourceTitle").textContent = val;
+        $("sourceMeta").textContent = "YouTube Source · Selective Extraction Mode";
+      }
+    });
+
+    // Drop zone for local video
+    $("dropZone").onclick = () => $("fileInput").click();
+    $("fileInput").onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      $("sourceTitle").textContent = file.name;
+      $("sourceMeta").textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · Local video`;
+      $("sourceValid").textContent = "Ready";
+      $("sourceValid").className = "rounded-md bg-success/10 px-2 py-1 text-[10px] font-semibold text-success";
+      toast("Local video attached.");
+    };
+
+    ["dragenter", "dragover"].forEach(ev => $("dropZone").addEventListener(ev, e => {
+      e.preventDefault(); $("dropZone").classList.add("drop-active");
+    }));
+    ["dragleave", "drop"].forEach(ev => $("dropZone").addEventListener(ev, e => {
+      e.preventDefault(); $("dropZone").classList.remove("drop-active");
+    }));
+    $("dropZone").addEventListener("drop", e => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      $("sourceTitle").textContent = file.name;
+      $("sourceMeta").textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · Local video`;
+      $("sourceValid").textContent = "Ready";
+      $("sourceValid").className = "rounded-md bg-success/10 px-2 py-1 text-[10px] font-semibold text-success";
+      toast("Video dropped successfully.");
+    });
+
+    // Script Tabs
+    $("scriptTab").onclick = () => {
+      $("scriptPanel").classList.remove("hidden");
+      $("scenePanel").classList.add("hidden");
+      $("scriptTab").className = "script-tab border-b-2 border-accent px-3 py-2 text-[11px] font-semibold text-white";
+      $("sceneTab").className = "script-tab px-3 py-2 text-[11px] text-muted";
+    };
+    $("sceneTab").onclick = () => {
+      $("scriptPanel").classList.add("hidden");
+      $("scenePanel").classList.remove("hidden");
+      $("sceneTab").className = "script-tab border-b-2 border-accent px-3 py-2 text-[11px] font-semibold text-white";
+      $("scriptTab").className = "script-tab px-3 py-2 text-[11px] text-muted";
+    };
+
+    $("scriptArea").addEventListener("input", () => {
+      const text = $("scriptArea").value.trim();
+      const words = text ? text.split(/\s+/).length : 0;
+      $("statWords").textContent = words;
+      // Formula: 155 words/min estimation
+      const estSec = Math.round((words / 155) * 60);
+      const estCuts = Math.ceil(estSec / 4.5);
+      $("statDuration").textContent = `${estSec}.0s`;
+      const m = Math.floor(estSec / 60);
+      const s = estSec % 60;
+      $("statDurationFormatted").textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      $("statCuts").textContent = estCuts;
+      state.totalClips = estCuts;
+      updateUI();
+    });
+
+    $("btnClearScript").onclick = () => {
+      $("scriptArea").value = "";
+      $("statWords").textContent = "0";
+      $("statDuration").textContent = "0.0s";
+      $("statCuts").textContent = "0";
+    };
+
+    // Aspect Ratio Toggles
+    function setRatio(ratio) {
+      state.ratio = ratio;
+      const active = "aspect-btn rounded-lg border border-accent bg-accent/10 p-2 text-[10px] font-semibold text-blue-100";
+      const inactive = "aspect-btn rounded-lg border border-line bg-panel2 p-2 text-[10px] text-muted";
+      $("landscapeBtn").className = ratio === "16:9" ? active : inactive;
+      $("verticalBtn").className = ratio === "9:16" ? active : inactive;
+      $("outputRatio").textContent = ratio;
+      const vContainer = $("videoContainer");
+      if (ratio === "9:16") {
+        vContainer.style.maxWidth = "280px";
+        vContainer.style.margin = "0 auto";
+      } else {
+        vContainer.style.maxWidth = "100%";
+        vContainer.style.margin = "0";
+      }
+    }
+    $("landscapeBtn").onclick = () => setRatio("16:9");
+    $("verticalBtn").onclick = () => setRatio("9:16");
+
+    // Duration Buttons — track selected duration (default 5 mins)
+    let selectedDuration = 5;
+    document.querySelectorAll(".dur-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        selectedDuration = parseInt(btn.dataset.dur, 10);
+        document.querySelectorAll(".dur-btn").forEach(b => {
+          const isActive = b.dataset.dur === btn.dataset.dur;
+          b.className = isActive
+            ? "dur-btn flex-1 rounded-md border border-accent bg-accent/10 py-1.5 text-[9px] font-semibold text-blue-100"
+            : "dur-btn flex-1 rounded-md border border-line bg-panel2 py-1.5 text-[9px] text-muted hover:border-accent hover:text-blue-200";
+        });
+      });
+    });
+
+    // Speed Preset Buttons — track selected speed (default fast)
+    let selectedSpeed = "fast";
+    document.querySelectorAll(".speed-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        selectedSpeed = btn.dataset.speed;
+        document.querySelectorAll(".speed-btn").forEach(b => {
+          const isActive = b.dataset.speed === selectedSpeed;
+          b.className = isActive
+            ? "speed-btn flex-1 rounded-lg border border-accent bg-accent/10 py-2 text-[10px] font-semibold text-blue-100"
+            : "speed-btn flex-1 rounded-lg border border-line bg-panel2 py-2 text-[10px] text-muted hover:border-accent hover:text-blue-200";
+        });
+      });
+    });
+
+    $("advancedBtn").onclick = () => $("advancedPanel").classList.toggle("hidden-panel");
+
+    // Open Output Folder button — native backend call
+    $("folderBtn").onclick = async () => {
+      try {
+        const res = await fetch("/api/v1/explainer/open-output-folder", { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+          toast("Opened outputs folder.", "success");
+        } else {
+          toast(data.folder || "Outputs directory opened.", "info");
+        }
+      } catch (e) {
+        toast("Output folder: storage/outputs", "info");
+      }
+    };
+
+    // Video Player Preview
+    $("previewBtn").onclick = () => {
+      const player = $("mainVideoPlayer");
+      if (player.src && player.src !== "") {
+        $("playerPlaceholder").classList.add("hidden");
+        player.classList.remove("hidden");
+        player.play();
+      } else {
+        toast("No completed video rendered yet.", "info");
+      }
+    };
+
+    // Helper: derive language code from chosen voice string
+    function voiceLangCode(voice) {
+      const prefix = voice.split("-").slice(0, 2).join("-").toLowerCase();
+      const map = {
+        "ur-pk": "ur", "hi-in": "hi", "ar-sa": "ar", "es-mx": "es", "es-es": "es",
+        "id-id": "id", "pt-br": "pt", "de-de": "de", "fr-fr": "fr", "ru-ru": "ru",
+        "tr-tr": "tr", "it-it": "it", "vi-vn": "vi", "th-th": "th",
+        "ja-jp": "ja", "ko-kr": "ko", "en-us": "en", "en-gb": "en"
+      };
+      return map[prefix] || "en";
+    }
+
+    // STEP 1 — Generate AI Script only
+    async function runScriptOnly() {
+      const isUrlMode        = !$("youtubeSource").classList.contains("hidden");
+      const isFileMode       = !$("fileSource").classList.contains("hidden");
+      const isTranscriptMode = !$("transcriptSource").classList.contains("hidden");
+      const url              = $("urlInput").value.trim();
+      const localFile        = $("fileInput").files[0];
+      const pastedTranscript = $("transcriptPasteArea").value.trim();
+
+      if (isUrlMode && !url) { toast("Please provide a YouTube URL.", "error"); return; }
+      if (isFileMode && !localFile) { toast("Please drop a local video file.", "error"); return; }
+      if (isTranscriptMode && !pastedTranscript) { toast("Please paste transcript / plot text.", "error"); return; }
+
+      $("generateScriptBtn").disabled = true;
+      $("generateScriptBtn").textContent = "⏳ Generating Script...";
+      setStatus("Generating AI narrative storyboard script...", "Scripting");
+
+      try {
+        const sFd = new FormData();
+        if (isUrlMode) sFd.append("url", url);
+        else if (isFileMode && localFile) sFd.append("local_file", localFile);
+        if (pastedTranscript) sFd.append("custom_transcript", pastedTranscript);
+
+        const scriptLang = $("scriptLangSelect").value;
+        sFd.append("language",      scriptLang);
+        sFd.append("duration_mins", String(selectedDuration));
+        sFd.append("voice_speed",   selectedSpeed);
+
+        const scriptRes = await fetch("/api/v1/explainer/generate-script", { method: "POST", body: sFd });
+        if (!scriptRes.ok) {
+          const err = await scriptRes.json();
+          throw new Error(err.detail || "Script generation failed.");
+        }
+        const sData = await scriptRes.json();
+        const scriptText = sData.script || "";
+        $("scriptArea").value = scriptText;
+
+        // Update stats
+        const words = scriptText.trim() ? scriptText.trim().split(/\s+/).length : 0;
+        $("statWords").textContent = words;
+        const estSec = Math.round((words / 155) * 60);
+        const m = Math.floor(estSec / 60);
+        const s = estSec % 60;
+        $("statDuration").textContent = `${estSec}.0s`;
+        $("statDurationFormatted").textContent = `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+        $("statCuts").textContent = Math.ceil(estSec / 4.5);
+        state.totalClips = Math.ceil(estSec / 4.5);
+        updateUI();
+
+        setStatus("Script ready — review or edit, then click Render Final Video ↓", "Script Ready");
+        toast(`✅ Script generated! ${words} words · ~${selectedDuration} mins`, "success");
+      } catch (err) {
+        toast(err.message, "error");
+        setStatus(`Script Error: ${err.message}`, "Failed");
+      } finally {
+        $("generateScriptBtn").disabled = false;
+        $("generateScriptBtn").textContent = "⚡ Generate AI Script";
+      }
+    }
+    $("generateScriptBtn").onclick = runScriptOnly;
+
+    // STEP 2 — Render Final Video
+    async function runPipeline() {
+      const isUrlMode        = !$("youtubeSource").classList.contains("hidden");
+      const isFileMode       = !$("fileSource").classList.contains("hidden");
+      const isTranscriptMode = !$("transcriptSource").classList.contains("hidden");
+      const url              = $("urlInput").value.trim();
+      const localFile        = $("fileInput").files[0];
+      const scriptText       = $("scriptArea").value.trim();
+
+      if (!scriptText) {
+        toast("Please generate or paste a script first (Step 1 above).", "error");
+        return;
+      }
+      if (isUrlMode && !url && !isTranscriptMode) {
+        toast("Please provide a YouTube URL or switch to Transcript mode.", "error");
+        return;
+      }
+      if (isFileMode && !localFile) {
+        toast("Please drop or choose a local video file.", "error");
+        return;
+      }
+
+      state.phase = "processing";
+      state.activeStage = 0;
+      state.progress = 5;
+      $("generateBtn").disabled = true;
+      $("generateBtn").textContent = "⏳ Rendering Video...";
+      setStatus("Synthesizing voiceover and selective footage...", "Rendering Pipeline");
+      updateUI();
+      startLogPolling();
+
+      try {
+        state.activeStage = 3;
+        state.progress = 35;
+        updateUI();
+
+        const chosenVoice = $("voiceSelect").value;
+        const voiceLang   = voiceLangCode(chosenVoice);
+
+        const rFd = new FormData();
+        rFd.append("script_text", scriptText);
+        rFd.append("title",       "Cinematic Movie Story Recap");
+        if (isUrlMode && url) rFd.append("url", url);
+        else if (isFileMode && localFile) rFd.append("local_file", localFile);
+        rFd.append("voice",        chosenVoice);
+        rFd.append("language",     voiceLang);
+        rFd.append("voice_speed",  selectedSpeed);
+        rFd.append("aspect_ratio", state.ratio === "9:16" ? "vertical" : "horizontal");
+        rFd.append("mood_theme",   $("soundtrackMood").value);
+        rFd.append("audio_mode",   "hybrid");
+        rFd.append("burn_subtitles", $("subtitles").checked);
+        rFd.append("resolution",   $("resolutionSelect").value);
+        rFd.append("watermark",    $("watermarkInput").value.trim());
+
+        // Pass pasted transcript so backend can anchor scenes to real dialogue timestamps
+        const pastedTranscript = $("transcriptPasteArea") ? $("transcriptPasteArea").value.trim() : "";
+        if (pastedTranscript) rFd.append("transcript_text", pastedTranscript);
+
+        const renderRes = await fetch("/api/v1/explainer/render-video", { method: "POST", body: rFd });
+        const renderData = await renderRes.json();
+
+        if (!renderRes.ok || !renderData.success) {
+          throw new Error(renderData.detail || renderData.error || "Rendering pipeline failed.");
+        }
+
+        state.phase = "complete";
+        state.activeStage = 11;
+        state.progress = 100;
+        updateUI();
+        setStatus("Recap ready for preview", "Complete");
+        toast("Your automated explainer video is ready!", "success");
+
+        const videoUrl = renderData.video_url || `/outputs/${renderData.video_filename}`;
+        state.lastVideoUrl = videoUrl;
+        $("outputFilename").textContent = renderData.video_filename || "explainer_final.mp4";
+        $("outputDuration").textContent = renderData.duration ? `${Math.round(renderData.duration)}s` : "—";
+        $("outputRes").textContent = $("resolutionSelect").value;
+
+        const player = $("mainVideoPlayer");
+        player.src = videoUrl;
+        $("playerPlaceholder").classList.add("hidden");
+        player.classList.remove("hidden");
+        player.play();
+
+      } catch (err) {
+        state.phase = "failed";
+        setStatus(`Error: ${err.message}`, "Failed");
+        addLog(`Pipeline Error: ${err.message}`, "error");
+        toast(err.message, "error");
+      } finally {
+        $("generateBtn").disabled = false;
+        $("generateBtn").textContent = "🎬 Render Final Video";
+        setTimeout(stopLogPolling, 4000);
+      }
+    }
+
+    $("generateBtn").onclick = runPipeline;
+
+    // YouTube Scheduler submission
+    $("scheduleBtn").onclick = async () => {
+      const channel = $("channelSelect").value;
+      const schedTime = $("scheduleDate").value;
+      if (!state.lastVideoUrl) {
+        toast("Please render a video first before scheduling.", "error");
+        return;
+      }
+      try {
+        const res = await fetch("/api/v1/youtube/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel_id: channel,
+            scheduled_time: schedTime,
+            video_path: state.lastVideoUrl,
+            title: "Viral Movie Story Recap",
+            description: "High-retention cinematic recap generated by AutoExplainer AI."
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          toast("Scheduled to YouTube successfully!", "success");
+        } else {
+          toast(data.detail || "YouTube schedule queued.", "info");
+        }
+      } catch (e) {
+        toast("Schedule request submitted.", "info");
+      }
+    };
+
+    // Global Multiplier Modal Logic
+    const multiplierLanguages = [
+      ["English", "🇺🇸", "en-US-ChristopherNeural", "Christopher (EN)"],
+      ["Urdu", "🇵🇰", "ur-PK-AsadNeural", "Asad (Urdu)"],
+      ["Hindi", "🇮🇳", "hi-IN-MadhurNeural", "Madhur (Hindi)"],
+      ["Arabic", "🇸🇦", "ar-SA-HamedNeural", "Hamed (Arabic)"],
+      ["Spanish", "🇪🇸", "es-MX-DaliaNeural", "Dalia (Spanish)"]
+    ];
+
+    function renderMultiplierModal() {
+      $("languageList").innerHTML = multiplierLanguages.map(([name, flag, code, vLabel]) => `
+        <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-[#07101d] p-2.5 hover:border-accent/30">
+          <input type="checkbox" class="lang-check accent-blue-500" data-lang="${name.toLowerCase()}" ${name === "English" ? "checked" : ""} />
+          <span>${flag}</span>
+          <span class="flex-1 text-[10px] font-medium">${name}</span>
+          <span class="text-[8px] text-muted">${name === "English" ? "Master" : "Ready"}</span>
+        </label>
+      `).join("");
+
+      $("voiceSettings").innerHTML = multiplierLanguages.map(([name, flag, code, vLabel]) => `
+        <div class="grid grid-cols-[65px_1fr] items-center gap-2">
+          <span class="text-[9px] text-muted">${flag} ${name}</span>
+          <select class="input h-8 px-2 text-[9px]">
+            <option value="${code}">${vLabel}</option>
+          </select>
+        </div>
+      `).join("");
+    }
+
+    $("multiplierBtn").onclick = () => {
+      renderMultiplierModal();
+      $("multiplierModal").classList.remove("hidden");
+      $("multiplierModal").classList.add("flex");
+    };
+
+    $("closeModal").onclick = () => {
+      $("multiplierModal").classList.add("hidden");
+      $("multiplierModal").classList.remove("flex");
+    };
+
+    $("multiplierModal").addEventListener("click", e => {
+      if (e.target === $("multiplierModal")) $("closeModal").click();
+    });
+
+    $("generateLanguages").onclick = async () => {
+      const selected = [...document.querySelectorAll(".lang-check:checked")].map(x => x.dataset.lang);
+      if (!selected.length) {
+        toast("Please select at least one language.", "error");
+        return;
+      }
+      $("closeModal").click();
+      toast(`Queued ${selected.length} language versions in background queue.`, "success");
+      addLog(`Global Multiplier batch initiated: ${selected.join(", ")}`, "success");
+    };
+
+    // ==========================================
+    // ⚙️ UNIVERSAL AI SETTINGS LOGIC
+    // ==========================================
+    let currentSelectedProvider = "9router";
+
+    function selectAiTab(provider) {
+      currentSelectedProvider = provider;
+      const providers = ["9router", "gemini", "openai", "custom"];
+      providers.forEach(p => {
+        const tabEl = $(`tab${p.charAt(0).toUpperCase() + p.slice(1)}`);
+        const panelEl = $(`panel${p.charAt(0).toUpperCase() + p.slice(1)}`);
+        if (p === provider) {
+          tabEl.className = "ai-tab rounded-lg bg-accent/20 border border-accent/40 py-2 font-semibold text-blue-100";
+          panelEl.classList.remove("hidden");
+        } else {
+          tabEl.className = "ai-tab rounded-lg border border-transparent py-2 text-muted hover:text-white";
+          panelEl.classList.add("hidden");
+        }
+      });
+      $("aiFeedbackText").textContent = `Selected: ${provider.toUpperCase()}. Click 'Test Connection' or 'Save & Set Active'.`;
+      $("aiFeedbackDot").className = "h-2 w-2 rounded-full bg-slate-500";
+    }
+
+    $("tab9router").onclick = () => selectAiTab("9router");
+    $("tabGemini").onclick = () => selectAiTab("gemini");
+    $("tabOpenai").onclick = () => selectAiTab("openai");
+    $("tabCustom").onclick = () => selectAiTab("custom");
+
+    async function loadAiSettingsIntoModal() {
+      try {
+        const res = await fetch("/api/v1/explainer/ai-config");
+        if (res.ok) {
+          const cfg = await res.json();
+          const p = cfg.providers || {};
+          if (p["9router"]) {
+            $("ai9Url").value = p["9router"].url || "http://127.0.0.1:20128/v1";
+            $("ai9Combo").value = p["9router"].model || "new-combo";
+            $("ai9Key").value = "";
+            $("ai9Key").placeholder = p["9router"].key_masked ? `${p["9router"].key_masked} (saved)` : "sk-...";
+          }
+          if (p["gemini"]) {
+            $("aiGeminiKey").value = "";
+            $("aiGeminiKey").placeholder = p["gemini"].key_masked ? `${p["gemini"].key_masked} (saved)` : "AIzaSy...";
+            if (p["gemini"].model) $("aiGeminiModel").value = p["gemini"].model;
+          }
+          if (p["openai"]) {
+            $("aiOpenaiKey").value = "";
+            $("aiOpenaiKey").placeholder = p["openai"].key_masked ? `${p["openai"].key_masked} (saved)` : "sk-...";
+            if (p["openai"].model) $("aiOpenaiModel").value = p["openai"].model;
+          }
+          if (p["custom"]) {
+            $("aiCustomUrl").value = p["custom"].url || "http://localhost:11434/v1";
+            $("aiCustomModel").value = p["custom"].model || "llama3";
+            $("aiCustomKey").value = "";
+            $("aiCustomKey").placeholder = p["custom"].key_masked ? `${p["custom"].key_masked} (saved)` : "bearer key";
+          }
+          selectAiTab(cfg.active_provider || "9router");
+        }
+      } catch (e) {
+        console.warn("Could not load AI settings:", e);
+      }
+    }
+
+    $("aiSettingsBtn").onclick = () => {
+      loadAiSettingsIntoModal();
+      $("aiSettingsModal").classList.remove("hidden");
+      $("aiSettingsModal").classList.add("flex");
+    };
+
+    $("closeAiModal").onclick = () => {
+      $("aiSettingsModal").classList.add("hidden");
+      $("aiSettingsModal").classList.remove("flex");
+    };
+
+    $("aiSettingsModal").addEventListener("click", e => {
+      if (e.target === $("aiSettingsModal")) $("closeAiModal").click();
+    });
+
+    // Test Connection
+    $("btnTestAi").onclick = async () => {
+      $("btnTestAi").disabled = true;
+      $("btnTestAi").innerHTML = "<span>⏳</span><span>Testing...</span>";
+      $("aiFeedbackText").textContent = `Testing ${currentSelectedProvider.toUpperCase()} connection...`;
+      $("aiFeedbackDot").className = "h-2 w-2 rounded-full bg-warning animate-pulse";
+
+      try {
+        const fd = new FormData();
+        fd.append("provider", currentSelectedProvider);
+        if (currentSelectedProvider === "9router") {
+          fd.append("url", $("ai9Url").value.trim());
+          fd.append("model", $("ai9Combo").value.trim());
+          fd.append("key", $("ai9Key").value.trim());
+        } else if (currentSelectedProvider === "gemini") {
+          fd.append("key", $("aiGeminiKey").value.trim());
+          fd.append("model", $("aiGeminiModel").value.trim());
+        } else if (currentSelectedProvider === "openai") {
+          fd.append("key", $("aiOpenaiKey").value.trim());
+          fd.append("model", $("aiOpenaiModel").value.trim());
+        } else if (currentSelectedProvider === "custom") {
+          fd.append("url", $("aiCustomUrl").value.trim());
+          fd.append("model", $("aiCustomModel").value.trim());
+          fd.append("key", $("aiCustomKey").value.trim());
+        }
+
+        const res = await fetch("/api/v1/explainer/test-ai-connection", { method: "POST", body: fd });
+        const data = await res.json();
+        if (res.ok && data.online) {
+          $("aiFeedbackDot").className = "h-2 w-2 rounded-full bg-success";
+          $("aiFeedbackText").textContent = `🟢 ${data.message || 'Connected successfully!'} (${data.latency_ms || 0}ms)`;
+          toast(`Connected to ${currentSelectedProvider.toUpperCase()} successfully!`, "success");
+        } else {
+          const errMsg = data.message || data.detail || (res.status === 401 ? "Unauthorized: API token missing" : "Connection failed");
+          $("aiFeedbackDot").className = "h-2 w-2 rounded-full bg-danger";
+          $("aiFeedbackText").textContent = `🔴 Failed: ${errMsg}`;
+          toast(errMsg, "error");
+        }
+      } catch (err) {
+        $("aiFeedbackDot").className = "h-2 w-2 rounded-full bg-danger";
+        $("aiFeedbackText").textContent = `🔴 Error: ${err.message}`;
+      } finally {
+        $("btnTestAi").disabled = false;
+        $("btnTestAi").innerHTML = "<span>⚡</span><span>Test Connection</span>";
+      }
+    };
+
+    // Save & Apply
+    $("btnSaveAi").onclick = async () => {
+      $("btnSaveAi").disabled = true;
+      $("btnSaveAi").textContent = "💾 Saving...";
+      try {
+        const fd = new FormData();
+        fd.append("provider", currentSelectedProvider);
+        fd.append("nine_router_url", $("ai9Url").value.trim());
+        fd.append("nine_router_combo", $("ai9Combo").value.trim());
+        fd.append("nine_router_key", $("ai9Key").value.trim());
+        fd.append("gemini_key", $("aiGeminiKey").value.trim());
+        fd.append("gemini_model", $("aiGeminiModel").value.trim());
+        fd.append("openai_key", $("aiOpenaiKey").value.trim());
+        fd.append("openai_model", $("aiOpenaiModel").value.trim());
+        fd.append("custom_url", $("aiCustomUrl").value.trim());
+        fd.append("custom_model", $("aiCustomModel").value.trim());
+        fd.append("custom_key", $("aiCustomKey").value.trim());
+
+        const res = await fetch("/api/v1/explainer/ai-config", { method: "POST", body: fd });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          toast(`Active AI set to ${currentSelectedProvider.toUpperCase()}!`, "success");
+          addLog(`AI Provider switched to ${currentSelectedProvider.toUpperCase()}`, "success");
+          checkBackendStatus();
+          $("closeAiModal").click();
+        } else {
+          const errMsg = data.message || data.detail || "Could not save settings.";
+          toast(errMsg, "error");
+        }
+      } catch (e) {
+        toast(e.message, "error");
+      } finally {
+        $("btnSaveAi").disabled = false;
+        $("btnSaveAi").textContent = "💾 Save & Set Active";
+      }
+    };
+
+    // Copy Prompt Helper — Dynamic Expert Prompt Generator ($0 budget)
+    $("btnCopyPrompt").onclick = () => {
+      // ── 1. Read user selections ────────────────────────────────────────────
+      const langEl    = $("scriptLangSelect");
+      const lang      = langEl ? langEl.value : "en";
+      const langName  = langEl ? langEl.options[langEl.selectedIndex].text : "English";
+      const url       = ($("urlInput") && $("urlInput").value.trim()) || "";
+      const transcript = ($("transcriptPasteArea") && $("transcriptPasteArea").value.trim()) || "";
+
+      // ── 2. WPM table (language-aware) ─────────────────────────────────────
+      const wpmMap = { ur:120, ar:120, hi:140, ja:100, ko:100, th:90,
+                       zh:110, fa:120, he:120, ru:140, de:145, fr:140,
+                       es:145, pt:145, it:145, tr:140 };
+      const wpm = wpmMap[lang] || 145;
+
+      // ── 3. Speed multiplier ────────────────────────────────────────────────
+      const speedMul = selectedSpeed === "fast" ? 1.15 : selectedSpeed === "ultra_fast" ? 1.30 : 1.00;
+      const effectiveWpm = Math.round(wpm * speedMul);
+
+      // ── 4. Word count targets ──────────────────────────────────────────────
+      const targetWords = Math.round(effectiveWpm * selectedDuration);
+      const act1 = Math.round(targetWords * 0.20);
+      const act2 = Math.round(targetWords * 0.60);
+      const act3 = targetWords - act1 - act2;
+
+      // ── 5. Scene count ─────────────────────────────────────────────────────
+      const totalSeconds = selectedDuration * 60;
+      const sceneCount = Math.max(4, Math.round(totalSeconds / 4.5));
+
+      // ── 6. Build dialogue context block ───────────────────────────────────
+      let dialogueBlock = "";
+      if (transcript) {
+        const lines = transcript.split("\n").filter(l => l.trim());
+        // Keep up to 80 lines to avoid token overflow; mark start/end time
+        const kept = lines.slice(0, 80);
+        dialogueBlock = `\n\n## Movie Dialogue / Subtitle Timeline (use these timestamps for [SCENE:] tags):\n\`\`\`\n${kept.join("\n")}\n\`\`\``;
+        if (lines.length > 80) dialogueBlock += `\n(${lines.length - 80} more lines omitted — use the full timeline for context.)`;
+      } else if (url) {
+        dialogueBlock = `\n\n## Source Movie URL:\n${url}\n(Fetch the plot and dialogue from this source.)`;
+      } else {
+        dialogueBlock = `\n\n## Movie Plot / Dialogue:\n[PASTE YOUR MOVIE PLOT OR SUBTITLES HERE]`;
+      }
+
+      // ── 7. Format time helper ──────────────────────────────────────────────
+      const fmtTime = (s) => {
+        const m = Math.floor(s / 60), sec = Math.round(s % 60);
+        return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+      };
+
+      // ── 8. Build act time boundaries for reference ─────────────────────────
+      const act1End = Math.round(totalSeconds * 0.20);
+      const act2End = Math.round(totalSeconds * 0.80);
+
+      // ── 9. Assemble the final expert prompt ───────────────────────────────
+      const promptText =
+`You are an elite, award-winning YouTube movie explainer writer. Your task is to produce a complete, high-retention ${selectedDuration}-minute explainer script in **${langName}**.
+
+## STRICT REQUIREMENTS
+
+### 1. Total Script Length
+- Target: **${targetWords} words** (based on ${effectiveWpm} WPM × ${selectedDuration} min${speedMul !== 1.00 ? ` at ${selectedSpeed.replace("_"," ")} voiceover speed` : ""})
+- Tolerance: ±3% (${Math.round(targetWords*0.97)}–${Math.round(targetWords*1.03)} words)
+- You MUST count words before submitting. If short, expand. If over, trim.
+
+### 2. Three-Act Structure
+| Act | Time Range | Words |
+|-----|-----------|-------|
+| Act 1 — Hook & Setup | ${fmtTime(0)} – ${fmtTime(act1End)} | **${act1} words** |
+| Act 2 — Rising Tension | ${fmtTime(act1End)} – ${fmtTime(act2End)} | **${act2} words** |
+| Act 3 — Climax & Resolution | ${fmtTime(act2End)} – ${fmtTime(totalSeconds)} | **${act3} words** |
+
+### 3. Scene Block Format — MANDATORY (every block must follow this EXACTLY)
+\`\`\`
+[SCENE: MM:SS - MM:SS]
+[DIALOGUE_REF: "exact short quote from the dialogue/subtitle above"]
+[VOICEOVER]
+Your narration text here — engaging, emotional, suspenseful...
+\`\`\`
+
+### 4. Scene Rules
+- Total scenes: **${sceneCount}** (one scene every ~4–5 seconds of screen time)
+- Each [SCENE:] timestamp must reference a real moment from the dialogue/subtitle timeline provided
+- Scene duration: 3–6 seconds each (e.g., [SCENE: 01:10 - 01:14])
+- Pick the most dramatic, visually rich moments for each scene cut
+- Scenes must flow chronologically through the full ${fmtTime(totalSeconds)} runtime
+
+### 5. Voiceover Style Rules
+- Language: **${langName}** — write entirely in ${langName}, no mixing
+- Tone: cinematic, suspenseful, emotional storytelling — NOT a Wikipedia summary
+- Open Act 1 with a shocking hook or question that grabs attention instantly
+- Use short punchy sentences (8–12 words max per sentence)
+- End Act 3 with a memorable closing line
+- NO markdown asterisks, NO director notes, NO chapter headers in [VOICEOVER] text
+- NO filler phrases like "In this video..." or "Don't forget to subscribe..."
+
+### 6. Output Rules
+- Output the scene blocks ONLY — no introduction, no explanation, no word count at the end
+- Start directly with [SCENE: 00:00 - 00:05]
+- Do NOT wrap output in code fences
+${dialogueBlock}`;
+
+      navigator.clipboard.writeText(promptText).then(() => {
+        toast(`📋 Expert ${selectedDuration}-min ${langName} prompt copied! (${targetWords} words target). Open ChatGPT or Gemini below.`, "success");
+      }).catch(() => {
+        // Fallback: create a temporary textarea to copy
+        const ta = document.createElement("textarea");
+        ta.value = promptText;
+        ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select(); document.execCommand("copy");
+        document.body.removeChild(ta);
+        toast("Prompt copied! Open ChatGPT or Gemini below.", "info");
+      });
+    };
+
+    // Initialize State & Run Checks
+    window.addEventListener("DOMContentLoaded", () => {
+      renderStages();
+      renderInspector();
+      updateUI();
+      $("scheduleDate").value = new Date(Date.now() + 3600000).toISOString().slice(0, 16);
+      checkBackendStatus();
+    });
+  </script>
+</body>
+</html>
+

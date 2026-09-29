@@ -1,0 +1,33 @@
+# Pinned with compatible-release specifiers (~=): patch updates allowed,
+# minor/major jumps blocked. Regenerate a full lockfile with:
+#   pip freeze > requirements.lock  (after a verified working install)
+fastapi~=0.115.0
+uvicorn[standard]~=0.30.0
+pydantic~=2.8.0
+pydantic-settings~=2.4.0
+python-multipart~=0.0.9
+aiofiles~=24.1.0
+httpx~=0.27.0
+requests~=2.32.0
+
+# Video & Audio Processing
+imageio-ffmpeg~=0.5.1
+yt-dlp~=2024.8.6
+edge-tts~=7.2.0
+Pillow~=10.4.0
+
+# Speech Recognition / ASR (Phase 6A)
+faster-whisper~=1.1.0
+
+# Subtitles & Multilingual NLP
+deep-translator~=1.11.4
+arabic-reshaper~=3.0.0
+python-bidi~=0.6.0
+
+# YouTube Upload & OAuth (imported by app/services/youtube_engine.py;
+# were missing entirely — fresh installs crashed on YouTube features)
+google-auth-oauthlib~=1.2.0
+google-api-python-client~=2.150.0
+
+# Desktop GUI Launcher
+pywebview~=5.0.0

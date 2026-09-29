@@ -1,0 +1,60 @@
+# AutoExplainer AI SaaS - Git Ignore Configuration
+
+# Python & Virtual Environments
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Sensitive Configuration, Credentials & API Keys
+.env
+.env.*
+!.env.example
+!backend/.env.example
+config/9router_settings.json
+config/ai_settings.json
+config/openai_settings.json
+backend/config/
+config/youtube_credentials.json
+config/youtube_channels.json
+!config/youtube_credentials.json.example
+*.backup.*
+*.key
+*.pem
+*.cert
+*.p12
+
+# Runtime Storage, Generated Media & Temporary Files
+storage/
+backend/storage/
+outputs/
+uploads/
+temp/
+logs/
+*.log
+
+# Video / Audio / Subtitle artifacts (except bundled app assets)
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.mp3
+*.wav
+*.zip
+*.srt
+*.vtt
+
+# Whitelist bundled design assets & fonts
+!backend/assets/**
+!backend/assets/fonts/*.ttf
+!backend/assets/sfx/*.wav
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
