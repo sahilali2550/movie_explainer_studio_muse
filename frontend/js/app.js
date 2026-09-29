@@ -2049,7 +2049,8 @@ async function scheduleCurrentVideoToYouTube() {
     statusMsg.textContent = `Queued (${data.channel_title || 'YouTube'}). Uploading in background…`;
     pBar.style.width = '25%';
 
-    // Poll task status
+    // Poll task status (reusable so a failed upload can be retried in place)
+    function startYtPolling() {
     if (ytPollingInterval) clearInterval(ytPollingInterval);
     ytPollingInterval = setInterval(async () => {
       try {
@@ -2073,12 +2074,32 @@ async function scheduleCurrentVideoToYouTube() {
           clearInterval(ytPollingInterval);
           btn.disabled = false;
           pBar.style.background = '#ef4444';
-          statusMsg.textContent = `❌ Upload Failed: ${pollData.error || pollData.message}`;
+          statusMsg.innerHTML = `❌ Upload Failed: ${escapeHtml(pollData.error || pollData.message || '')} <button id="ytRetryBtn" style="margin-left:8px;padding:4px 14px;background:#38bdf8;color:#04222e;border:none;border-radius:6px;cursor:pointer;font-weight:600;">↻ Retry</button>`;
+          const retryBtn = document.getElementById('ytRetryBtn');
+          if (retryBtn) retryBtn.onclick = async () => {
+            retryBtn.disabled = true;
+            retryBtn.textContent = 'Retrying…';
+            try {
+              const rRes = await fetch(`/api/v1/youtube/tasks/${taskId}/retry`, { method: 'POST' });
+              const rData = await rRes.json();
+              if (!rRes.ok) throw new Error(rData.detail || 'Retry failed');
+              statusMsg.textContent = 'Re-queued. Uploading in background…';
+              pBar.style.width = '25%';
+              pBar.style.background = '';
+              startYtPolling();
+            } catch (retryErr) {
+              retryBtn.disabled = false;
+              retryBtn.textContent = '↻ Retry';
+              statusMsg.textContent = `❌ Retry failed: ${retryErr.message}`;
+            }
+          };
         }
       } catch (pollErr) {
         console.warn('Poll error:', pollErr);
       }
     }, 1500);
+    }
+    startYtPolling();
 
   } catch (err) {
     btn.disabled = false;

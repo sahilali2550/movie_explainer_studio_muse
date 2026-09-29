@@ -8,8 +8,24 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from app.core import config
+from app.services import upload_task_store as task_store
 
 logger = logging.getLogger("youtube_engine")
+
+# Durable backing store for upload tasks (sqlite). Configured here so the
+# engine works even without the FastAPI lifespan; init_db() runs at startup.
+task_store.configure(config.STORAGE_DIR / "upload_tasks.db")
+
+
+class _PersistedTask(dict):
+    """Task dict that mirrors every mutation to sqlite (best-effort).
+
+    Lets the existing worker code keep doing ``upload_tasks[tid][...] = ...``
+    unchanged while making each update durable across restarts.
+    """
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        task_store.save_task(self)
 
 YOUTUBE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
@@ -387,9 +403,20 @@ def start_video_schedule_task(
 ) -> str:
     """Start background video upload & schedule task."""
     task_id = str(uuid.uuid4())
-    upload_tasks[task_id] = {
+    upload_tasks[task_id] = _PersistedTask({
         "task_id": task_id,
         "channel_id": channel_id,
+        # Durable params (for retry after restart):
+        "video_path": video_path,
+        "title": title,
+        "description": description,
+        "tags": tags,
+        "publish_at_iso": publish_at_iso,
+        "thumbnail_path": thumbnail_path,
+        "srt_path": srt_path,
+        "language": language,
+        "attempts": 1,
+        # Live display fields:
         "status": "queued",
         "progress": 0,
         "message": "Upload queued in background worker...",
@@ -397,7 +424,10 @@ def start_video_schedule_task(
         "video_id": None,
         "video_url": None,
         "error": None
-    }
+    })
+    # NOTE: _PersistedTask.__init__ does not trigger __setitem__, so persist
+    # the initial "queued" row explicitly (covers crash before 1st update).
+    task_store.save_task(upload_tasks[task_id])
 
     thread = threading.Thread(
         target=_background_upload_worker,
@@ -417,3 +447,63 @@ def start_video_schedule_task(
     )
     thread.start()
     return task_id
+
+
+def _spawn_upload_worker(task_id: str, params: Dict[str, Any]) -> None:
+    """(Re)start the background worker thread for a task's stored params."""
+    thread = threading.Thread(
+        target=_background_upload_worker,
+        args=(
+            task_id,
+            params["channel_id"],
+            params["video_path"],
+            params["title"],
+            params["description"],
+            params.get("tags", []),
+            params["publish_at_iso"],
+            params.get("thumbnail_path"),
+            params.get("srt_path"),
+            params.get("language", "en"),
+        ),
+        daemon=True,
+    )
+    thread.start()
+
+
+def retry_video_schedule_task(task_id: str) -> str:
+    """Re-queue a failed upload task with its original parameters.
+
+    Returns the task_id. Raises ValueError if the task cannot be retried.
+    """
+    stored = task_store.get_task(task_id)
+    if not stored:
+        raise ValueError("Task not found.")
+    if stored.get("status") != "failed":
+        raise ValueError(
+            f"Only failed tasks can be retried (current status: {stored.get('status')})."
+        )
+    if not stored.get("video_path"):
+        raise ValueError("Task has no stored video path; cannot retry.")
+    task = _PersistedTask(stored)
+    task["attempts"] = int(task.get("attempts") or 1) + 1
+    task["status"] = "queued"
+    task["progress"] = 0
+    task["error"] = None
+    task["video_id"] = None
+    task["video_url"] = None
+    task["message"] = "Re-queued for upload (retry)..."
+    upload_tasks[task_id] = task
+    _spawn_upload_worker(task_id, stored)
+    logger.info("Retrying upload task %s (attempt %s)", task_id, task["attempts"])
+    return task_id
+
+
+def rehydrate_tasks(limit: int = 50) -> int:
+    """Load recent persisted tasks into the in-memory view (call at startup)."""
+    count = 0
+    for stored in task_store.list_recent(limit):
+        tid = stored.get("task_id")
+        if tid and tid not in upload_tasks:
+            upload_tasks[tid] = _PersistedTask(stored)
+            count += 1
+    return count

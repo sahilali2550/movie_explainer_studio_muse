@@ -20,8 +20,10 @@ from app.services.youtube_engine import (
     get_authorization_url,
     exchange_code_for_tokens,
     start_video_schedule_task,
+    retry_video_schedule_task,
     upload_tasks
 )
+from app.services import upload_task_store as task_store
 
 logger = logging.getLogger("youtube_api")
 router = APIRouter(prefix="/youtube", tags=["youtube"])
@@ -343,6 +345,20 @@ def schedule_video(req: ScheduleVideoRequest):
 def get_task_status(task_id: str):
     """Poll progress of a video scheduling task."""
     task = upload_tasks.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found.")
+    if task is None:
+        # Fall back to the durable store (covers tasks from before a restart).
+        stored = task_store.get_task(task_id)
+        if stored is None:
+            raise HTTPException(status_code=404, detail="Task not found.")
+        task = stored
     return task
+
+
+@router.post("/tasks/{task_id}/retry")
+def retry_task(task_id: str):
+    """Re-queue a failed upload task with its original parameters."""
+    try:
+        retried_id = retry_video_schedule_task(task_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"task_id": retried_id, "status": "queued"}

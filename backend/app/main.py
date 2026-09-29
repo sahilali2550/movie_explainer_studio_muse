@@ -17,6 +17,18 @@ async def lifespan(app: FastAPI):
     removed = purge_stale_temp_files(max_age_hours=24.0)
     if removed:
         print(f"🧹 Startup cleanup: removed {removed} stale temp file(s).")
+    # Durable upload-task store: init DB, fail tasks left hanging by a
+    # previous restart (they become retryable), rehydrate recent history.
+    from app.services import upload_task_store as task_store
+    from app.services.youtube_engine import rehydrate_tasks
+    task_store.configure(STORAGE_DIR / "upload_tasks.db")
+    task_store.init_db()
+    interrupted = task_store.mark_interrupted()
+    if interrupted:
+        print(f"📤 {interrupted} interrupted upload task(s) marked failed (retry available).")
+    rehydrated = rehydrate_tasks()
+    if rehydrated:
+        print(f"📤 Rehydrated {rehydrated} upload task(s) from previous session.")
     yield
 
 
